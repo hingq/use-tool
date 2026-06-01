@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, nextTick, watch } from "vue";
-import { Sparkles, Play, RefreshCw, ArrowDown, Paperclip, Mic, ArrowUp, Sun, Moon } from "lucide-vue-next";
+import { Sparkles, Play, RefreshCw, ArrowDown, Paperclip, Mic, ArrowUp, Sun, Moon, Settings, X } from "lucide-vue-next";
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 
 interface Message {
@@ -29,7 +29,28 @@ const isDark = ref(false);
 
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
-let eventSource: EventSource | null = null;
+
+// API Service Settings (TODO(security): localStorage storage exposes API keys to XSS. Use BFF or HttpOnly cookies in production.)
+const defaultApiKey = (import.meta.env.VITE_API_KEY as string) || (import.meta.env.VITE_HERMES_API_KEY as string) || "nev";
+const apiEndpoint = ref(localStorage.getItem("hermes-api-endpoint") || "http://82.156.247.203:8080/v1");
+const apiKey = ref(localStorage.getItem("hermes-api-key") || defaultApiKey);
+const modelName = ref(localStorage.getItem("hermes-model-name") || "deepseek-v4-flash");
+const systemPrompt = ref(localStorage.getItem("hermes-system-prompt") || "");
+const conversationId = ref(localStorage.getItem("hermes-conversation-id") || `conv_${Date.now()}`);
+const showSettings = ref(false);
+
+// Ensure conversationId is stored
+localStorage.setItem("hermes-conversation-id", conversationId.value);
+
+const saveSettings = () => {
+  localStorage.setItem("hermes-api-endpoint", apiEndpoint.value);
+  localStorage.setItem("hermes-api-key", apiKey.value);
+  localStorage.setItem("hermes-model-name", modelName.value);
+  localStorage.setItem("hermes-system-prompt", systemPrompt.value);
+  showSettings.value = false;
+};
+
+let abortController: AbortController | null = null;
 
 // 2. Theme Toggling
 const toggleTheme = () => {
@@ -101,12 +122,26 @@ const resetScrollState = () => {
   scrollToBottom(true);
 };
 
-// 5. Connect to Real SSE Service
-const connectSSE = () => {
+// 5. Connect to Real SSE Service (using POST stream fetch)
+const stopStreaming = () => {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  isStreaming.value = false;
+  isConnecting.value = false;
+  const lastMsg = messages.value[messages.value.length - 1];
+  if (lastMsg && lastMsg.role === "assistant") {
+    lastMsg.isStreaming = false;
+  }
+  scrollToBottom(true);
+};
+
+const connectSSE = async () => {
   if (isStreaming.value || isConnecting.value) return;
 
-  if (eventSource) {
-    eventSource.close();
+  if (abortController) {
+    abortController.abort();
   }
 
   const query = inputMsg.value.trim() || "实时获取数据流";
@@ -134,39 +169,143 @@ const connectSSE = () => {
   isStreaming.value = true;
   scrollToBottom(true);
 
-  eventSource = new EventSource("http://127.0.0.1:3000/api/v1/sse");
+  abortController = new AbortController();
 
-  eventSource.addEventListener("handshake", () => {
-    isConnecting.value = false;
-    scrollToBottom();
-  });
+  try {
+    const targetUrl = apiEndpoint.value.endsWith("/")
+      ? `${apiEndpoint.value}responses`
+      : `${apiEndpoint.value}/responses`;
 
-  eventSource.addEventListener("ai-stream", (event) => {
+    // Stateful request: only send the new query and conversation ID
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey.value}`,
+      },
+      body: JSON.stringify({
+        model: modelName.value,
+        input: query,
+        conversation: conversationId.value,
+        instructions: systemPrompt.value || undefined,
+        stream: true,
+      }),
+      signal: abortController.signal,
+    });
+
     isConnecting.value = false;
-    if (event.data === "\\n") {
-      assistantMsg.value.content += "\n";
-    } else {
-      assistantMsg.value.content += event.data;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
     }
-    scrollToBottom();
-  });
 
-  eventSource.addEventListener("ai-complete", () => {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("Response body is not readable");
+    }
+
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let reasoningMode = false;
+    let currentEvent = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.startsWith("event: ")) {
+          currentEvent = trimmed.slice(7).trim();
+        } else if (trimmed.startsWith("data: ")) {
+          const dataStr = trimmed.slice(6).trim();
+          if (dataStr === "[DONE]") {
+            break;
+          }
+
+          try {
+            const data = JSON.parse(dataStr);
+            
+            // 1. Check for standard Chat Completions delta (fallback compatibility)
+            const choice = data.choices?.[0];
+            if (choice) {
+              const delta = choice.delta;
+              if (delta.reasoning_content) {
+                if (!reasoningMode) {
+                  reasoningMode = true;
+                  assistantMsg.value.content += "<thought>\n";
+                }
+                assistantMsg.value.content += delta.reasoning_content;
+              } else {
+                if (reasoningMode) {
+                  reasoningMode = false;
+                  assistantMsg.value.content += "\n</thought>\n\n";
+                }
+                if (delta.content) {
+                  assistantMsg.value.content += delta.content;
+                }
+              }
+            } 
+            // 2. Check for Responses API reasoning delta
+            else if (currentEvent === "response.output_text.reasoning_delta" && data.delta) {
+              if (!reasoningMode) {
+                reasoningMode = true;
+                assistantMsg.value.content += "<thought>\n";
+              }
+              assistantMsg.value.content += data.delta;
+            }
+            // 3. Check for Responses API output_text delta
+            else if (currentEvent === "response.output_text.delta" && data.delta) {
+              if (reasoningMode) {
+                reasoningMode = false;
+                assistantMsg.value.content += "\n</thought>\n\n";
+              }
+              assistantMsg.value.content += data.delta;
+            }
+            // 4. In case event name is missing but data has delta (completions fallback)
+            else if (data.delta) {
+              if (reasoningMode) {
+                reasoningMode = false;
+                assistantMsg.value.content += "\n</thought>\n\n";
+              }
+              assistantMsg.value.content += data.delta;
+            }
+            scrollToBottom();
+          } catch (err) {
+            // Ignore parse errors on partial chunks
+          }
+        }
+      }
+    }
+
+    if (reasoningMode) {
+      assistantMsg.value.content += "\n</thought>\n\n";
+    }
+
     isStreaming.value = false;
     assistantMsg.value.isStreaming = false;
-    if (eventSource) eventSource.close();
     scrollToBottom(true);
-  });
-
-  eventSource.onerror = (error) => {
-    console.error("EventSource exception:", error);
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.log("Fetch stream aborted by user");
+      return;
+    }
+    console.error("SSE connection exception:", error);
     isConnecting.value = false;
     isStreaming.value = false;
     assistantMsg.value.isStreaming = false;
-    assistantMsg.value.content += "\n\n*(⚡ EventSource 连接断开，请检查本地 3000 端口服务是否正常运行。)*";
-    if (eventSource) eventSource.close();
+    assistantMsg.value.content += `\n\n*(⚡ 连接异常，请检查配置和网络: ${error.message})*`;
     scrollToBottom(true);
-  };
+  } finally {
+    abortController = null;
+  }
 };
 
 // 6. Simulate Mock Stream response
@@ -296,6 +435,8 @@ const clearHistory = () => {
       content: "会话历史已清空。请输入您想讨论的话题或点击上方测试流按钮。",
     }
   ];
+  conversationId.value = `conv_${Date.now()}`;
+  localStorage.setItem("hermes-conversation-id", conversationId.value);
   isUserScrolling.value = false;
 };
 
@@ -318,8 +459,8 @@ onMounted(() => {
 onUnmounted(() => {
   document.body.style.overflow = "";
   document.documentElement.style.overflow = "";
-  if (eventSource) {
-    eventSource.close();
+  if (abortController) {
+    abortController.abort();
   }
 });
 </script>
@@ -364,6 +505,17 @@ onUnmounted(() => {
             <Sun v-if="isDark" class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 text-amber-500 animate-pulse" />
             <Moon v-else class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 text-blue-500" />
             <span>{{ isDark ? '暗黑模式' : '明亮模式' }}</span>
+          </button>
+
+          <!-- Settings Button -->
+          <button 
+            @click="showSettings = true"
+            type="button"
+            class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-mono text-[9px] md:text-xs font-semibold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full flex items-center shadow-sm cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800/60 transition-all active:scale-95 duration-200"
+            title="API 配置"
+          >
+            <Settings class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 text-zinc-500" />
+            <span>设置</span>
           </button>
         </div>
       </div>
@@ -479,13 +631,14 @@ onUnmounted(() => {
             <Mic class="h-4 w-4" />
           </button>
 
-          <!-- Circular Send Button -->
+          <!-- Circular Send/Stop Button -->
           <button
-            @click="handleSend"
-            :disabled="!inputMsg.trim() || isStreaming || isConnecting"
-            class="h-8 w-8 rounded-full bg-blue-600 disabled:bg-zinc-100 dark:disabled:bg-zinc-900 text-white disabled:text-zinc-300 dark:disabled:text-zinc-700 flex items-center justify-center hover:bg-blue-700 hover:scale-105 active:scale-95 disabled:pointer-events-none transition-all duration-200 cursor-pointer shadow-sm"
+            @click="isStreaming || isConnecting ? stopStreaming() : handleSend()"
+            :disabled="!inputMsg.trim() && !isStreaming && !isConnecting"
+            class="h-8 w-8 rounded-full bg-blue-600 disabled:bg-zinc-100 dark:disabled:bg-zinc-900 text-white disabled:text-zinc-300 dark:disabled:text-zinc-700 flex items-center justify-center hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shadow-sm"
           >
-            <ArrowUp class="h-4.5 w-4.5" />
+            <span v-if="isStreaming || isConnecting" class="h-2.5 w-2.5 bg-white rounded-sm"></span>
+            <ArrowUp v-else class="h-4.5 w-4.5" />
           </button>
         </div>
 
@@ -495,6 +648,77 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Settings Modal -->
+    <Transition name="fade">
+      <div v-if="showSettings" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div class="w-full max-w-md bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-900">
+            <h3 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">API 服务配置</h3>
+            <button @click="showSettings = false" class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+              <X class="h-5 w-5" />
+            </button>
+          </div>
+          
+          <!-- Content -->
+          <div class="p-6 space-y-4 text-left">
+            <div>
+              <label class="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">API Base URL (Prefix)</label>
+              <input 
+                v-model="apiEndpoint" 
+                type="text" 
+                placeholder="http://82.156.247.203:8080/v1" 
+                class="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">API Key</label>
+              <input 
+                v-model="apiKey" 
+                type="password" 
+                placeholder="API Key" 
+                class="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Model Name</label>
+              <input 
+                v-model="modelName" 
+                type="text" 
+                placeholder="deepseek-v4-flash" 
+                class="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">System Prompt</label>
+              <textarea 
+                v-model="systemPrompt" 
+                rows="3"
+                placeholder="您是 AI 助手..." 
+                class="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors resize-none"
+              ></textarea>
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div class="flex justify-end space-x-3 px-6 py-4 bg-zinc-50/50 dark:bg-zinc-900/20 border-t border-zinc-100 dark:border-zinc-900">
+            <button 
+              @click="showSettings = false" 
+              class="px-4 py-2 text-xs font-semibold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+            >
+              取消
+            </button>
+            <button 
+              @click="saveSettings" 
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all active:scale-95 duration-200"
+            >
+              保存配置
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -517,5 +741,15 @@ onUnmounted(() => {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.3);
+}
+
+/* Fade transition for settings modal */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
