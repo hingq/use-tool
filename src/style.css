@@ -113,7 +113,6 @@ button {
 }
 
 @media (max-width: 768px) {
-
   html,
   body {
     overflow: scroll;
@@ -164,14 +163,14 @@ button {
 }
 
 .dark {
-  --background: oklch(0.20 0.012 250);
+  --background: oklch(0.2 0.012 250);
   --foreground: oklch(0.86 0.012 250);
   --card: oklch(0.23 0.012 250);
   --card-foreground: oklch(0.86 0.012 250);
   --popover: oklch(0.23 0.012 250);
   --popover-foreground: oklch(0.86 0.012 250);
   --primary: oklch(0.72 0.05 250);
-  --primary-foreground: oklch(0.20 0.012 250);
+  --primary-foreground: oklch(0.2 0.012 250);
   --secondary: oklch(0.26 0.012 250);
   --secondary-foreground: oklch(0.86 0.012 250);
   --muted: oklch(0.26 0.012 250);
@@ -179,8 +178,8 @@ button {
   --accent: oklch(0.26 0.012 250);
   --accent-foreground: oklch(0.86 0.012 250);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.30 0.012 250 / 50%);
-  --input: oklch(0.30 0.012 250 / 70%);
+  --border: oklch(0.3 0.012 250 / 50%);
+  --input: oklch(0.3 0.012 250 / 70%);
   --ring: oklch(0.72 0.05 250);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -193,7 +192,7 @@ button {
   --sidebar-primary-foreground: oklch(0.86 0.012 250);
   --sidebar-accent: oklch(0.26 0.012 250);
   --sidebar-accent-foreground: oklch(0.86 0.012 250);
-  --sidebar-border: oklch(0.30 0.012 250 / 50%);
+  --sidebar-border: oklch(0.3 0.012 250 / 50%);
   --sidebar-ring: oklch(0.72 0.05 250);
 }
 
@@ -211,8 +210,6 @@ button {
   }
 }
 
-
-
 ::view-transition-new(root) {
   z-index: 10;
   /* 调校后的曲线：压低了前期的爆发力，让中后期的扩散更均匀平滑 */
@@ -222,7 +219,6 @@ button {
 ::view-transition-old(root) {
   z-index: 1;
 }
-
 
 @keyframes theme-reveal {
   from {

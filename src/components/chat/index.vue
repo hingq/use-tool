@@ -1,7 +1,10 @@
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from "vue";
-import { Sparkles, Play, RefreshCw, ArrowDown, Paperclip, Mic, ArrowUp, Sun, Moon } from "lucide-vue-next";
+import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import MarkdownRenderer from "./MarkdownRenderer.vue";
+import ChatHeader from "./components/ChatHeader.vue";
+import ActionCards from "./components/ActionCards.vue";
+import ChatInput from "./components/ChatInput.vue";
+import LoadingBubble from "./components/LoadingBubble.vue";
 
 interface Message {
   id: string;
@@ -17,7 +20,7 @@ const messages = ref<Message[]>([
     role: "assistant",
     content: `你好！我是 **Hermes Agent**。我已经升级了我的渲染引擎！
     
-现在我支持由 **markdown-it** + **KaTeX** + **highlight.js** 强力驱动的纯虚拟 DOM（VNode）组件化渲染。您可以点击输入框上方的 **“运行模拟测试流”**，体验我为您准备的包含数学公式和工具调用的多模态文档。`,
+现在我支持由 **markdown-it** + **KaTeX** + **highlight.js** 强力驱动的纯虚拟 DOM（VNode）组件化渲染。您可以点击输入框上方的 **“运行模拟测试流”**，体验我为您准备的包含数学公式 and 工具调用的多模态文档。`,
   },
 ]);
 
@@ -27,12 +30,11 @@ const isStreaming = ref(false);
 const isUserScrolling = ref(false);
 const isDark = ref(false);
 
-const inputRef = ref<HTMLTextAreaElement | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
 
 // API Service Settings (fixed/non-editable: endpoint and model are locked)
 const apiEndpoint = "http://82.156.247.203:8080/v1";
-const apiKey = (import.meta.env.VITE_API_KEY as string) || (import.meta.env.VITE_HERMES_API_KEY as string) || "nev";
+const apiKey = (import.meta.env.VITE_API_KEY as string);
 const modelName = "deepseek-v4-flash";
 const systemPrompt = "";
 const conversationId = ref(localStorage.getItem("hermes-conversation-id") || `conv_${Date.now()}`);
@@ -67,20 +69,7 @@ const applyThemeClass = () => {
   }
 };
 
-// 3. Textarea Auto-grow
-const adjustHeight = () => {
-  const el = inputRef.value;
-  if (!el) return;
-  el.style.height = "auto";
-  const newHeight = Math.min(el.scrollHeight, 160);
-  el.style.height = `${newHeight}px`;
-};
-
-watch(inputMsg, () => {
-  nextTick(adjustHeight);
-});
-
-// 4. Scroll Logic (Industry Standard - Snap to bottom only if already there)
+// 3. Scroll Logic (Industry Standard - Snap to bottom only if already there)
 const scrollToBottom = (force = false) => {
   nextTick(() => {
     const el = messagesContainer.value;
@@ -98,7 +87,7 @@ const handleScroll = (event: Event) => {
   const el = event.target as HTMLElement;
   const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
 
-  // 核心逻辑：只要向上滑动超过 10px，就判定为“用户手动浏览历史”，立即锁死自动滚动，交出控制权
+  // 核心逻辑：只要向上滑动超过 15px，就判定为“用户手动浏览历史”，立即锁死自动滚动，交出控制权
   if (distanceFromBottom > 15) {
     isUserScrolling.value = true;
   } else {
@@ -112,7 +101,7 @@ const resetScrollState = () => {
   scrollToBottom(true);
 };
 
-// 5. Connect to Real SSE Service (using POST stream fetch)
+// 4. Connect to Real SSE Service (using POST stream fetch)
 const stopStreaming = () => {
   if (abortController) {
     abortController.abort();
@@ -136,7 +125,6 @@ const connectSSE = async () => {
 
   const query = inputMsg.value.trim() || "实时获取数据流";
   inputMsg.value = "";
-  nextTick(adjustHeight);
 
   // Append user message
   messages.value.push({
@@ -222,7 +210,7 @@ const connectSSE = async () => {
 
           try {
             const data = JSON.parse(dataStr);
-            
+
             // 1. Check for standard Chat Completions delta (fallback compatibility)
             const choice = data.choices?.[0];
             if (choice) {
@@ -242,7 +230,7 @@ const connectSSE = async () => {
                   assistantMsg.value.content += delta.content;
                 }
               }
-            } 
+            }
             // 2. Check for Responses API reasoning delta
             else if (currentEvent === "response.output_text.reasoning_delta" && data.delta) {
               if (!reasoningMode) {
@@ -298,7 +286,7 @@ const connectSSE = async () => {
   }
 };
 
-// 6. Simulate Mock Stream response
+// 5. Simulate Mock Stream response
 const startSimulation = () => {
   if (isStreaming.value || isConnecting.value) return;
 
@@ -393,22 +381,31 @@ print(f"二维高斯积分 = {integral_val:.6f}")
 
 流式渲染演示已全部结束。您可以点击输入框右上方的 **“清空会话”** 复位界面！`;
 
-  let currentIndex = 0;
-  const charsPerTick = 2; // Stream 2 characters per 35ms
-  
-  const timer = setInterval(() => {
-    if (currentIndex < fullMockText.length) {
-      const chunk = fullMockText.substring(currentIndex, currentIndex + charsPerTick);
-      assistantMsg.value.content += chunk;
-      currentIndex += charsPerTick;
-      scrollToBottom();
-    } else {
-      clearInterval(timer);
-      isStreaming.value = false;
-      assistantMsg.value.isStreaming = false;
-      scrollToBottom(true);
-    }
-  }, 35);
+  // Wait 1.2 seconds to simulate connecting/thinking delay and show LoadingBubble
+  setTimeout(() => {
+    if (!isStreaming.value || assistantMsg.value.id !== assistantMsgId) return;
+
+    let currentIndex = 0;
+    const charsPerTick = 2; // Stream 2 characters per 35ms
+
+    const timer = setInterval(() => {
+      if (currentIndex < fullMockText.length) {
+        if (!isStreaming.value) {
+          clearInterval(timer);
+          return;
+        }
+        const chunk = fullMockText.substring(currentIndex, currentIndex + charsPerTick);
+        assistantMsg.value.content += chunk;
+        currentIndex += charsPerTick;
+        scrollToBottom();
+      } else {
+        clearInterval(timer);
+        isStreaming.value = false;
+        assistantMsg.value.isStreaming = false;
+        scrollToBottom(true);
+      }
+    }, 35);
+  }, 1200);
 };
 
 const handleSend = () => {
@@ -423,7 +420,7 @@ const clearHistory = () => {
       id: "welcome",
       role: "assistant",
       content: "会话历史已清空。请输入您想讨论的话题或点击上方测试流按钮。",
-    }
+    },
   ];
   conversationId.value = `conv_${Date.now()}`;
   localStorage.setItem("hermes-conversation-id", conversationId.value);
@@ -439,7 +436,9 @@ onMounted(() => {
     isDark.value = window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
   applyThemeClass();
-
+  if (!apiKey) {
+    throw new Error("API Key is not set. Please define API_KEY in your environment variables.");
+  }
   // Scrollbar and page body overflow locks
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
@@ -456,65 +455,25 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="chat-app-wrapper relative w-full h-[100vh] md:h-[calc(100vh-2rem)] flex flex-col justify-between bg-transparent">
+  <div
+    class="chat-app-wrapper relative w-full h-[100vh] md:h-[calc(100vh-2rem)] flex flex-col justify-between bg-transparent">
     <!-- Top model header -->
-    <header class="w-full border-b border-zinc-200/40 dark:border-zinc-800/40 bg-transparent select-none">
-      <div class="max-w-3xl mx-auto w-full flex items-center justify-between px-3 py-2 md:px-4 md:py-3">
-        <div class="flex items-center space-x-2">
-          <span class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-mono text-[10px] md:text-xs font-semibold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full flex items-center shadow-sm">
-            <Sparkles class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 md:mr-1.5 text-blue-500 animate-pulse" />
-            Hermes Agent 2.5
-          </span>
-        </div>
-
-        <div class="flex items-center space-x-3 text-[10px] md:text-xs text-zinc-400">
-          <!-- Status Indicator -->
-          <span v-if="isConnecting" class="flex items-center text-amber-500 font-medium">
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping mr-1"></span>
-            连接中
-          </span>
-          <span v-else-if="isStreaming" class="flex items-center text-emerald-500 font-medium">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>
-            生成中
-          </span>
-          <span v-else class="flex items-center text-zinc-400">
-            <span class="h-1.5 w-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600 mr-1"></span>
-            就绪
-          </span>
-
-          <!-- Divider -->
-          <span class="h-3.5 w-px bg-zinc-200 dark:bg-zinc-800/60"></span>
-
-          <!-- Theme Toggle Switch Pill -->
-          <button 
-            @click="toggleTheme"
-            type="button"
-            class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-mono text-[9px] md:text-xs font-semibold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full flex items-center shadow-sm cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800/60 transition-all active:scale-95 duration-200"
-            :title="isDark ? '切换至明亮模式' : '切换至暗黑模式'"
-          >
-            <Sun v-if="isDark" class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 text-amber-500 animate-pulse" />
-            <Moon v-else class="h-3 md:h-3.5 w-3 md:w-3.5 mr-1 text-blue-500" />
-            <span>{{ isDark ? '暗黑模式' : '明亮模式' }}</span>
-          </button>
-        </div>
-      </div>
-    </header>
+    <ChatHeader
+      :isConnecting="isConnecting"
+      :isStreaming="isStreaming"
+      :isDark="isDark"
+      @toggleTheme="toggleTheme"
+    />
 
     <!-- Message flow viewport -->
-    <div 
-      ref="messagesContainer"
-      @scroll="handleScroll"
-      class="flex-1 overflow-y-auto w-full scroll-smooth scrollbar-thin"
-    >
+    <div ref="messagesContainer" @scroll="handleScroll"
+      class="flex-1 overflow-y-auto w-full scroll-smooth scrollbar-thin">
       <div class="max-w-3xl mx-auto w-full px-4 py-6 space-y-8">
-        <div 
-          v-for="msg in messages" 
-          :key="msg.id"
-          class="flex flex-col"
-        >
+        <div v-for="msg in messages" :key="msg.id" class="flex flex-col">
           <!-- User Chat Bubble -->
           <div v-if="msg.role === 'user'" class="flex justify-end w-full">
-            <div class="max-w-[80%] bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/10 dark:border-zinc-800/20 text-zinc-900 dark:text-zinc-100 px-4 py-2.5 rounded-2xl text-left whitespace-pre-wrap leading-relaxed text-sm shadow-sm">
+            <div
+              class="max-w-[80%] bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/10 dark:border-zinc-800/20 text-zinc-900 dark:text-zinc-100 px-4 py-2.5 rounded-2xl text-left whitespace-pre-wrap leading-relaxed text-sm shadow-sm">
               {{ msg.content }}
             </div>
           </div>
@@ -522,104 +481,39 @@ onUnmounted(() => {
           <!-- Assistant Chat Area (Claude/Gemini borderless layout) -->
           <div v-else class="flex items-start space-x-4 w-full">
             <!-- Circular HA Avatar -->
-            <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-md shadow-blue-500/15 select-none mt-1">
+            <div
+              class="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-md shadow-blue-500/15 select-none mt-1">
               HA
             </div>
             <!-- Borderless Content -->
             <div class="flex-1 min-w-0 pr-4">
-              <MarkdownRenderer 
-                :content="msg.content" 
-                :isStreaming="msg.isStreaming"
-              />
+              <LoadingBubble v-if="msg.isStreaming && !msg.content" />
+              <MarkdownRenderer v-else :content="msg.content" :isStreaming="msg.isStreaming" />
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Scroll down floating anchor -->
-    <button 
-      v-if="isUserScrolling"
-      @click="resetScrollState"
-      class="absolute bottom-28 right-4 md:bottom-40 md:right-8 lg:right-auto lg:left-[calc(50%+330px)] h-8 w-8 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all duration-200 z-10 cursor-pointer"
-    >
-      <ArrowDown class="h-4 w-4" />
-    </button>
-
     <!-- Bottom Input & Controls Container -->
     <div class="relative w-full bg-transparent">
       <div class="max-w-3xl mx-auto w-full px-4 pb-6">
         <!-- Suspended Action Test Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 max-w-2xl mx-auto mb-3 md:mb-4 select-none w-full">
-          <!-- Card 1: Simulation -->
-          <button 
-            @click="startSimulation" 
-            :disabled="isStreaming || isConnecting"
-            class="flex items-start space-x-3 p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-zinc-200/50 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md hover:border-blue-500/50 hover:bg-blue-50/20 dark:hover:bg-blue-950/10 text-left transition-all duration-300 group cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none w-full"
-          >
-            <div class="p-1.5 md:p-2 rounded-lg md:rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300">
-              <Play class="h-4 w-4 md:h-4.5 md:w-4.5 fill-current" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="text-[11px] md:text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">运行模拟测试流</div>
-              <div class="text-[9px] md:text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">验证 LaTeX 公式与 VNode 代码 high-light</div>
-            </div>
-          </button>
-          
-          <!-- Card 2: Clear Session -->
-          <button 
-            @click="clearHistory"
-            :disabled="isStreaming || isConnecting"
-            class="flex items-start space-x-3 p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-zinc-200/50 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md hover:border-amber-500/50 hover:bg-amber-50/20 dark:hover:amber-950/10 text-left transition-all duration-300 group cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none w-full"
-          >
-            <div class="p-1.5 md:p-2 rounded-lg md:rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform duration-300">
-              <RefreshCw class="h-4.5 w-4.5" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="text-[11px] md:text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">清理会话历史</div>
-              <div class="text-[9px] md:text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">重置上下文，清空缓存与消息</div>
-            </div>
-          </button>
-        </div>
+        <ActionCards
+          :isStreaming="isStreaming"
+          :isConnecting="isConnecting"
+          @startSimulation="startSimulation"
+          @clearHistory="clearHistory"
+        />
 
         <!-- Rounded Input Capsule (GPT/Claude style) -->
-        <div class="flex items-end space-x-2 md:space-x-3 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800/80 rounded-[22px] md:rounded-3xl px-3 py-2 md:px-4 md:py-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-zinc-300 dark:focus-within:border-zinc-700 transition-all duration-300">
-          <!-- Attachment Icon -->
-          <button 
-            type="button"
-            class="h-8 w-8 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95"
-          >
-            <Paperclip class="h-4 w-4" />
-          </button>
-
-          <!-- Dynamic Textarea -->
-          <textarea
-            ref="inputRef"
-            v-model="inputMsg"
-            @keydown.enter.prevent="handleSend"
-            placeholder="给 Hermes 发送消息，或输入 Prompt 测试 SSE..."
-            rows="1"
-            class="flex-1 resize-none bg-transparent outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 min-h-[24px] max-h-40 overflow-y-auto py-1 md:py-1.5 leading-relaxed"
-          ></textarea>
-
-          <!-- Voice Mic Icon -->
-          <button 
-            type="button"
-            class="h-8 w-8 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 mr-1"
-          >
-            <Mic class="h-4 w-4" />
-          </button>
-
-          <!-- Circular Send/Stop Button -->
-          <button
-            @click="isStreaming || isConnecting ? stopStreaming() : handleSend()"
-            :disabled="!inputMsg.trim() && !isStreaming && !isConnecting"
-            class="h-8 w-8 rounded-full bg-blue-600 disabled:bg-zinc-100 dark:disabled:bg-zinc-900 text-white disabled:text-zinc-300 dark:disabled:text-zinc-700 flex items-center justify-center hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shadow-sm"
-          >
-            <span v-if="isStreaming || isConnecting" class="h-2.5 w-2.5 bg-white rounded-sm"></span>
-            <ArrowUp v-else class="h-4.5 w-4.5" />
-          </button>
-        </div>
+        <ChatInput
+          v-model="inputMsg"
+          :isStreaming="isStreaming"
+          :isConnecting="isConnecting"
+          @send="handleSend"
+          @stop="stopStreaming"
+        />
 
         <!-- Small Bottom Caption -->
         <div class="text-[10px] text-zinc-400 dark:text-zinc-500 text-center mt-2 font-medium">
@@ -640,13 +534,16 @@ onUnmounted(() => {
 ::-webkit-scrollbar {
   width: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.15);
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.3);
 }
