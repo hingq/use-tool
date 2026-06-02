@@ -18,6 +18,11 @@ const router = createRouter({
       component: () => import("./components/epub/index.vue"),
     },
     {
+      path: "/audiobook",
+      name: "audiobook",
+      component: () => import("./components/epub/audiobook.vue"),
+    },
+    {
       path: "/chat",
       name: "chat",
       component: () => import("./components/chat/index.vue"),
