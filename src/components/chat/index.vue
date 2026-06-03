@@ -5,6 +5,8 @@ import ChatHeader from "./components/ChatHeader.vue";
 import ActionCards from "./components/ActionCards.vue";
 import ChatInput from "./components/ChatInput.vue";
 import LoadingBubble from "./components/LoadingBubble.vue";
+import Sidebar from "./components/Sidebar.vue";
+import DeleteConfirmModal from "./components/DeleteConfirmModal.vue";
 
 interface Message {
   id: string;
@@ -38,6 +40,15 @@ const apiKey = (import.meta.env.VITE_API_KEY as string);
 const modelName = "deepseek-v4-flash";
 const systemPrompt = "";
 const conversationId = ref(localStorage.getItem("hermes-conversation-id") || `conv_${Date.now()}`);
+
+// Dashboard API (port 9119)
+const dashboardApiBase = (import.meta.env.VITE_DASHBOARD_API_BASE as string) || "http://127.0.0.1:9119/api";
+
+// Sidebar & Sessions State
+const sessions = ref<any[]>([]);
+const isSidebarOpen = ref(localStorage.getItem("hermes-sidebar-open") !== "false");
+const isDeleteModalOpen = ref(false);
+const sessionToDelete = ref<string | null>(null);
 
 // Ensure conversationId is stored
 localStorage.setItem("hermes-conversation-id", conversationId.value);
@@ -270,6 +281,7 @@ const connectSSE = async () => {
     isStreaming.value = false;
     assistantMsg.value.isStreaming = false;
     scrollToBottom(true);
+    fetchSessions();
   } catch (error: any) {
     if (error.name === "AbortError") {
       console.log("Fetch stream aborted by user");
@@ -413,21 +425,138 @@ const handleSend = () => {
   connectSSE();
 };
 
-const clearHistory = () => {
+// Fetch the list of historical sessions
+const fetchSessions = async () => {
+  try {
+    const res = await fetch(`${dashboardApiBase}/sessions`, {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      sessions.value = Array.isArray(data) ? data : (data.sessions || []);
+    }
+  } catch (error) {
+    console.error("Error fetching sessions:", error);
+  }
+};
+
+// Load full message history of a selected session
+const loadSessionMessages = async (id: string) => {
+  if (!id) return;
+  try {
+    const res = await fetch(`${dashboardApiBase}/sessions/${id}/messages`, {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to load messages: ${res.status}`);
+    }
+    const data = await res.json();
+    const rawMessages = Array.isArray(data) ? data : (data.messages || []);
+    
+    // Filter and map to local message structure
+    messages.value = rawMessages
+      .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
+      .map((msg: any, idx: number) => ({
+        id: msg.id || `${msg.role}_${idx}_${Date.now()}`,
+        role: msg.role,
+        content: msg.content || ""
+      }));
+      
+    if (messages.value.length === 0) {
+      resetToWelcomeMessage();
+    }
+    resetScrollState();
+  } catch (error) {
+    console.error("Error loading session messages:", error);
+  }
+};
+
+// Start a fresh new chat
+const startNewChat = () => {
   if (isStreaming.value || isConnecting.value) return;
-  messages.value = [
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "会话历史已清空。请输入您想讨论的话题或点击上方测试流按钮。",
-    },
-  ];
+  resetToWelcomeMessage();
   conversationId.value = `conv_${Date.now()}`;
   localStorage.setItem("hermes-conversation-id", conversationId.value);
   isUserScrolling.value = false;
 };
 
-onMounted(() => {
+// Reset welcome message
+const resetToWelcomeMessage = () => {
+  messages.value = [
+    {
+      id: "welcome",
+      role: "assistant",
+      content: `你好！我是 **Hermes Agent**。我已经升级了我的渲染引擎！
+    
+现在我支持由 **markdown-it** + **KaTeX** + **highlight.js** 强力驱动的纯虚拟 DOM（VNode）组件化渲染。您可以点击输入框上方的 **“运行模拟测试流”**，体验我为您准备的包含数学公式 and 工具调用的多模态文档。`,
+    },
+  ];
+};
+
+// Select and load a session
+const selectSession = async (id: string) => {
+  if (isStreaming.value || isConnecting.value) return;
+  conversationId.value = id;
+  localStorage.setItem("hermes-conversation-id", id);
+  await loadSessionMessages(id);
+  
+  if (window.innerWidth < 768) {
+    isSidebarOpen.value = false;
+  }
+};
+
+// Open deletion confirmation modal
+const confirmDeleteSession = (id: string) => {
+  sessionToDelete.value = id;
+  isDeleteModalOpen.value = true;
+};
+
+// Confirm delete API call
+const handleDeleteConfirm = async () => {
+  if (!sessionToDelete.value) return;
+  const id = sessionToDelete.value;
+  isDeleteModalOpen.value = false;
+  sessionToDelete.value = null;
+
+  try {
+    const res = await fetch(`${dashboardApiBase}/sessions/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`
+      }
+    });
+    if (res.ok) {
+      if (conversationId.value === id) {
+        startNewChat();
+      }
+      await fetchSessions();
+    } else {
+      console.error(`Failed to delete session ${id}: ${res.status}`);
+    }
+  } catch (error) {
+    console.error("Error deleting session:", error);
+  }
+};
+
+const handleDeleteCancel = () => {
+  isDeleteModalOpen.value = false;
+  sessionToDelete.value = null;
+};
+
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value;
+  localStorage.setItem("hermes-sidebar-open", isSidebarOpen.value ? "true" : "false");
+};
+
+const clearHistory = () => {
+  startNewChat();
+};
+
+onMounted(async () => {
   // Read saved theme preference
   const saved = localStorage.getItem("hermes-dark-theme");
   if (saved !== null) {
@@ -442,6 +571,12 @@ onMounted(() => {
   // Scrollbar and page body overflow locks
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
+  
+  // Load session list & load current active session history
+  await fetchSessions();
+  if (conversationId.value && !conversationId.value.startsWith("conv_mock_")) {
+    await loadSessionMessages(conversationId.value);
+  }
   scrollToBottom(true);
 });
 
@@ -455,79 +590,100 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="chat-app-wrapper relative w-full h-[100vh] md:h-[calc(100vh-2rem)] flex flex-col justify-between bg-transparent">
-    <!-- Top model header -->
-    <ChatHeader
-      :isConnecting="isConnecting"
-      :isStreaming="isStreaming"
-      :isDark="isDark"
-      @toggleTheme="toggleTheme"
+  <div class="flex h-screen w-full overflow-hidden chat-app-wrapper bg-transparent">
+    <!-- Sidebar for session history -->
+    <Sidebar
+      :sessions="sessions"
+      :activeSessionId="conversationId"
+      :isSidebarOpen="isSidebarOpen"
+      @select="selectSession"
+      @delete="confirmDeleteSession"
+      @new-chat="startNewChat"
+      @toggle-sidebar="toggleSidebar"
     />
 
-    <!-- Message flow viewport -->
-    <div ref="messagesContainer" @scroll="handleScroll"
-      class="flex-1 overflow-y-auto w-full scroll-smooth scrollbar-thin">
-      <div class="max-w-3xl mx-auto w-full px-4 py-6 space-y-8">
-        <div v-for="msg in messages" :key="msg.id" class="flex flex-col">
-          <!-- User Chat Bubble -->
-          <div v-if="msg.role === 'user'" class="flex justify-end w-full">
-            <div
-              class="max-w-[80%] bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/10 dark:border-zinc-800/20 text-zinc-900 dark:text-zinc-100 px-4 py-2.5 rounded-2xl text-left whitespace-pre-wrap leading-relaxed text-sm shadow-sm">
-              {{ msg.content }}
+    <!-- Main Chat Workspace -->
+    <div class="flex-1 flex flex-col h-full min-w-0 relative overflow-hidden">
+      <!-- Top model header -->
+      <ChatHeader
+        :isConnecting="isConnecting"
+        :isStreaming="isStreaming"
+        :isDark="isDark"
+        :isSidebarOpen="isSidebarOpen"
+        @toggleTheme="toggleTheme"
+      />
+
+      <!-- Message flow viewport -->
+      <div ref="messagesContainer" @scroll="handleScroll"
+        class="flex-1 overflow-y-auto w-full scroll-smooth scrollbar-thin">
+        <div class="max-w-3xl mx-auto w-full px-4 py-6 space-y-8">
+          <div v-for="msg in messages" :key="msg.id" class="flex flex-col">
+            <!-- User Chat Bubble -->
+            <div v-if="msg.role === 'user'" class="flex justify-end w-full">
+              <div
+                class="max-w-[80%] bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/10 dark:border-zinc-800/20 text-zinc-900 dark:text-zinc-100 px-4 py-2.5 rounded-2xl text-left whitespace-pre-wrap leading-relaxed text-sm shadow-sm">
+                {{ msg.content }}
+              </div>
+            </div>
+
+            <!-- Assistant Chat Area (Claude/Gemini borderless layout) -->
+            <div v-else class="flex items-start space-x-4 w-full">
+              <!-- Circular HA Avatar -->
+              <div
+                class="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-md shadow-blue-500/15 select-none mt-1">
+                HA
+              </div>
+              <!-- Borderless Content -->
+              <div class="flex-1 min-w-0 pr-4">
+                <LoadingBubble v-if="msg.isStreaming && !msg.content" />
+                <MarkdownRenderer v-else :content="msg.content" :isStreaming="msg.isStreaming" />
+              </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          <!-- Assistant Chat Area (Claude/Gemini borderless layout) -->
-          <div v-else class="flex items-start space-x-4 w-full">
-            <!-- Circular HA Avatar -->
-            <div
-              class="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-md shadow-blue-500/15 select-none mt-1">
-              HA
-            </div>
-            <!-- Borderless Content -->
-            <div class="flex-1 min-w-0 pr-4">
-              <LoadingBubble v-if="msg.isStreaming && !msg.content" />
-              <MarkdownRenderer v-else :content="msg.content" :isStreaming="msg.isStreaming" />
-            </div>
+      <!-- Bottom Input & Controls Container -->
+      <div class="relative w-full bg-transparent">
+        <div class="max-w-3xl mx-auto w-full px-4 pb-6">
+          <!-- Suspended Action Test Cards -->
+          <ActionCards
+            :isStreaming="isStreaming"
+            :isConnecting="isConnecting"
+            @startSimulation="startSimulation"
+            @clearHistory="clearHistory"
+          />
+
+          <!-- Rounded Input Capsule (GPT/Claude style) -->
+          <ChatInput
+            v-model="inputMsg"
+            :isStreaming="isStreaming"
+            :isConnecting="isConnecting"
+            @send="handleSend"
+            @stop="stopStreaming"
+          />
+
+          <!-- Small Bottom Caption -->
+          <div class="text-[10px] text-zinc-400 dark:text-zinc-500 text-center mt-2 font-medium">
+            Hermes 2.5. 运行模拟测试流以检验 LaTeX 与 VNode 语法高亮渲染。
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Bottom Input & Controls Container -->
-    <div class="relative w-full bg-transparent">
-      <div class="max-w-3xl mx-auto w-full px-4 pb-6">
-        <!-- Suspended Action Test Cards -->
-        <ActionCards
-          :isStreaming="isStreaming"
-          :isConnecting="isConnecting"
-          @startSimulation="startSimulation"
-          @clearHistory="clearHistory"
-        />
-
-        <!-- Rounded Input Capsule (GPT/Claude style) -->
-        <ChatInput
-          v-model="inputMsg"
-          :isStreaming="isStreaming"
-          :isConnecting="isConnecting"
-          @send="handleSend"
-          @stop="stopStreaming"
-        />
-
-        <!-- Small Bottom Caption -->
-        <div class="text-[10px] text-zinc-400 dark:text-zinc-500 text-center mt-2 font-medium">
-          Hermes 2.5. 运行模拟测试流以检验 LaTeX 与 VNode 语法高亮渲染。
-        </div>
-      </div>
-    </div>
+    <!-- Micro-modal for deletion confirmation -->
+    <DeleteConfirmModal
+      :isOpen="isDeleteModalOpen"
+      @confirm="handleDeleteConfirm"
+      @cancel="handleDeleteCancel"
+    />
   </div>
 </template>
 
 <style scoped>
 /* Scoped layout rules */
 .chat-app-wrapper {
-  margin: 0.5rem auto;
+  margin: 0;
 }
 
 /* Custom scrollbar widths */
