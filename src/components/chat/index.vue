@@ -5,7 +5,7 @@ import ChatHeader from "./components/ChatHeader.vue";
 import ActionCards from "./components/ActionCards.vue";
 import ChatInput from "./components/ChatInput.vue";
 import LoadingBubble from "./components/LoadingBubble.vue";
-import Sidebar from "./components/Sidebar.vue";
+// import Sidebar from "./components/Sidebar.vue";
 import DeleteConfirmModal from "./components/DeleteConfirmModal.vue";
 
 interface Message {
@@ -35,14 +35,14 @@ const isDark = ref(false);
 const messagesContainer = ref<HTMLElement | null>(null);
 
 // API Service Settings (fixed/non-editable: endpoint and model are locked)
-const apiEndpoint = "http://82.156.247.203:8080/v1";
+const apiEndpoint = (import.meta.env.VITE_API_ENDPOINT as string);
 const apiKey = (import.meta.env.VITE_API_KEY as string);
 const modelName = "deepseek-v4-flash";
 const systemPrompt = "";
 const conversationId = ref(localStorage.getItem("hermes-conversation-id") || `conv_${Date.now()}`);
 
-// Dashboard API (port 9119)
-const dashboardApiBase = (import.meta.env.VITE_DASHBOARD_API_BASE as string) || "http://127.0.0.1:9119/api";
+// Dashboard API 
+const dashboardApiBase = (import.meta.env.VITE_DASHBOARD_API_BASE as string);
 
 // Sidebar & Sessions State
 const sessions = ref<any[]>([]);
@@ -430,7 +430,7 @@ const fetchSessions = async () => {
   try {
     const res = await fetch(`${dashboardApiBase}/sessions`, {
       headers: {
-        "Authorization": `Bearer ${apiKey}`
+        "x-api-key": `${apiKey}`
       }
     });
     if (res.ok) {
@@ -448,7 +448,7 @@ const loadSessionMessages = async (id: string) => {
   try {
     const res = await fetch(`${dashboardApiBase}/sessions/${id}/messages`, {
       headers: {
-        "Authorization": `Bearer ${apiKey}`
+        "x-api-key": `${apiKey}`
       }
     });
     if (!res.ok) {
@@ -456,7 +456,7 @@ const loadSessionMessages = async (id: string) => {
     }
     const data = await res.json();
     const rawMessages = Array.isArray(data) ? data : (data.messages || []);
-    
+
     // Filter and map to local message structure
     messages.value = rawMessages
       .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
@@ -465,7 +465,7 @@ const loadSessionMessages = async (id: string) => {
         role: msg.role,
         content: msg.content || ""
       }));
-      
+
     if (messages.value.length === 0) {
       resetToWelcomeMessage();
     }
@@ -503,7 +503,7 @@ const selectSession = async (id: string) => {
   conversationId.value = id;
   localStorage.setItem("hermes-conversation-id", id);
   await loadSessionMessages(id);
-  
+
   if (window.innerWidth < 768) {
     isSidebarOpen.value = false;
   }
@@ -526,7 +526,7 @@ const handleDeleteConfirm = async () => {
     const res = await fetch(`${dashboardApiBase}/sessions/${id}`, {
       method: "DELETE",
       headers: {
-        "Authorization": `Bearer ${apiKey}`
+        "x-api-key": `${apiKey}`
       }
     });
     if (res.ok) {
@@ -571,7 +571,7 @@ onMounted(async () => {
   // Scrollbar and page body overflow locks
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
-  
+
   // Load session list & load current active session history
   await fetchSessions();
   if (conversationId.value && !conversationId.value.startsWith("conv_mock_")) {
@@ -591,27 +591,15 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-screen w-full overflow-hidden chat-app-wrapper bg-transparent">
-    <!-- Sidebar for session history -->
-    <Sidebar
-      :sessions="sessions"
-      :activeSessionId="conversationId"
-      :isSidebarOpen="isSidebarOpen"
-      @select="selectSession"
-      @delete="confirmDeleteSession"
-      @new-chat="startNewChat"
-      @toggle-sidebar="toggleSidebar"
-    />
+    <!--  <Sidebar :sessions="sessions" :activeSessionId="conversationId" :isSidebarOpen="isSidebarOpen"
+      @select="selectSession" @delete="confirmDeleteSession" @new-chat="startNewChat" @toggle-sidebar="toggleSidebar" /> -->
+
 
     <!-- Main Chat Workspace -->
     <div class="flex-1 flex flex-col h-full min-w-0 relative overflow-hidden">
       <!-- Top model header -->
-      <ChatHeader
-        :isConnecting="isConnecting"
-        :isStreaming="isStreaming"
-        :isDark="isDark"
-        :isSidebarOpen="isSidebarOpen"
-        @toggleTheme="toggleTheme"
-      />
+      <ChatHeader :isConnecting="isConnecting" :isStreaming="isStreaming" :isDark="isDark"
+        :isSidebarOpen="isSidebarOpen" @toggleTheme="toggleTheme" />
 
       <!-- Message flow viewport -->
       <div ref="messagesContainer" @scroll="handleScroll"
@@ -647,21 +635,12 @@ onUnmounted(() => {
       <div class="relative w-full bg-transparent">
         <div class="max-w-3xl mx-auto w-full px-4 pb-6">
           <!-- Suspended Action Test Cards -->
-          <ActionCards
-            :isStreaming="isStreaming"
-            :isConnecting="isConnecting"
-            @startSimulation="startSimulation"
-            @clearHistory="clearHistory"
-          />
+          <ActionCards :isStreaming="isStreaming" :isConnecting="isConnecting" @startSimulation="startSimulation"
+            @clearHistory="clearHistory" />
 
           <!-- Rounded Input Capsule (GPT/Claude style) -->
-          <ChatInput
-            v-model="inputMsg"
-            :isStreaming="isStreaming"
-            :isConnecting="isConnecting"
-            @send="handleSend"
-            @stop="stopStreaming"
-          />
+          <ChatInput v-model="inputMsg" :isStreaming="isStreaming" :isConnecting="isConnecting" @send="handleSend"
+            @stop="stopStreaming" />
 
           <!-- Small Bottom Caption -->
           <div class="text-[10px] text-zinc-400 dark:text-zinc-500 text-center mt-2 font-medium">
@@ -672,11 +651,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Micro-modal for deletion confirmation -->
-    <DeleteConfirmModal
-      :isOpen="isDeleteModalOpen"
-      @confirm="handleDeleteConfirm"
-      @cancel="handleDeleteCancel"
-    />
+    <DeleteConfirmModal :isOpen="isDeleteModalOpen" @confirm="handleDeleteConfirm" @cancel="handleDeleteCancel" />
   </div>
 </template>
 
