@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {createRouter, createWebHistory} from "vue-router";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,6 +26,11 @@ const router = createRouter({
       path: "/chat",
       name: "chat",
       component: () => import("./components/chat/index.vue"),
+    },
+    {
+      path: "/vps",
+      name: "debug-vars",
+      component: () => import("./components/debugVars/index.vue"),
     },
   ],
 });
