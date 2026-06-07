@@ -7,6 +7,17 @@
       <div class="absolute -top-12 -right-12 -z-10 h-32 w-32 rounded-full bg-indigo-500/20 blur-2xl"></div>
       <div class="absolute -bottom-12 -left-12 -z-10 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl"></div>
 
+      <!-- 历史任务切换 -->
+      <button
+        type="button"
+        @click="toggleList"
+        :title="showList ? '返回' : '历史任务'"
+        class="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-indigo-500/50 dark:bg-black/20"
+        :class="showList ? 'border-indigo-500/50 text-indigo-500' : ''"
+      >
+        <History class="h-3.5 w-3.5" /> 历史任务
+      </button>
+
       <div class="mb-8 text-center">
         <h1
           class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent dark:from-indigo-400 dark:to-purple-400"
@@ -18,6 +29,8 @@
         </p>
       </div>
 
+      <!-- ===== 状态机视图（非历史任务面板时显示） ===== -->
+      <template v-if="!showList">
       <!-- ========================= State: form ========================= -->
       <form v-if="status === 'form'" @submit.prevent="submit" class="space-y-5">
         <!-- TXT upload / dropzone -->
@@ -189,7 +202,7 @@
         <p class="mt-2 text-sm text-muted-foreground">点击下方按钮下载 M4B 文件</p>
         <div class="mt-6 flex gap-3">
           <button
-            @click="download"
+            @click="download(jobId, title)"
             class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700"
           >
             <Download class="h-4 w-4" /> 下载 M4B
@@ -226,6 +239,95 @@
           </button>
         </div>
       </div>
+      </template>
+
+      <!-- ========================= 历史任务面板 ========================= -->
+      <div v-else>
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-base font-semibold text-foreground">历史任务</h3>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="loadList"
+              :disabled="listLoading"
+              title="刷新"
+              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-indigo-500 disabled:opacity-50 dark:bg-black/20"
+            >
+              <RefreshCw class="h-4 w-4" :class="listLoading ? 'animate-spin' : ''" />
+            </button>
+            <button
+              type="button"
+              @click="closeList"
+              title="关闭"
+              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-red-500 dark:bg-black/20"
+            >
+              <X class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- loading -->
+        <div v-if="listLoading" class="flex flex-col items-center justify-center py-12">
+          <div class="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500/20 border-t-indigo-600"></div>
+        </div>
+
+        <!-- error -->
+        <p v-else-if="listError" class="py-8 text-center text-sm text-red-500 dark:text-red-400">{{ listError }}</p>
+
+        <!-- empty -->
+        <p v-else-if="jobs.length === 0" class="py-12 text-center text-sm text-muted-foreground">暂无任务</p>
+
+        <!-- list -->
+        <ul v-else class="space-y-3">
+          <li
+            v-for="job in jobs"
+            :key="job.jobId"
+            @click="openJob(job)"
+            class="cursor-pointer rounded-2xl border border-muted-foreground/20 bg-white/50 p-4 transition-colors hover:border-indigo-500/50 dark:bg-black/20"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-foreground">{{ job.title || "（无标题）" }}</p>
+                <p class="mt-1 text-xs text-muted-foreground">{{ fmtTime(job.createdAt) }}</p>
+              </div>
+              <span class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="STATUS_BADGE[job.status]">
+                {{ STATUS_LABELS[job.status] }}
+              </span>
+            </div>
+
+            <!-- 行操作 -->
+            <div class="mt-3 flex flex-wrap gap-2" @click.stop>
+              <button
+                v-if="job.status === 'done'"
+                @click="download(job.jobId, job.title)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
+                <Download class="h-3.5 w-3.5" /> 下载
+              </button>
+              <button
+                v-if="isActive(job.status)"
+                @click="cancelFromList(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+              >
+                <X class="h-3.5 w-3.5" /> 取消
+              </button>
+              <button
+                v-if="job.status === 'failed' || job.status === 'canceled'"
+                @click="resumeFromList(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
+              >
+                <RotateCcw class="h-3.5 w-3.5" /> 恢复
+              </button>
+              <button
+                @click="openJob(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-muted-foreground/20 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-indigo-500/50"
+              >
+                详情
+              </button>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
@@ -234,12 +336,12 @@
 import { computed, onUnmounted, ref } from "vue";
 import {
   FileText, ImageIcon, Headphones, Loader2, CheckCircle,
-  AlertCircle, Download, RotateCcw, X,
+  AlertCircle, Download, RotateCcw, X, History, RefreshCw,
 } from "lucide-vue-next";
 import {
-  createJob, cancelJob, resumeJob, openEvents, fileUrl,
+  createJob, cancelJob, resumeJob, openEvents, fileUrl, listJobs, getJob,
   AudiobookApiError,
-  type JobInfo, type JobProgress, type JobPhase,
+  type JobInfo, type JobProgress, type JobPhase, type JobStatus, type JobSummary,
 } from "./audiobook-api";
 
 // --- 后端枚举（与 routes/jobs.ts 校验对齐） ---
@@ -277,6 +379,12 @@ const progress = ref<JobProgress>({
   transcodeChunks: { done: 0, total: 0 },
 });
 let closeEvents: (() => void) | null = null;
+
+// --- 历史任务列表 ---
+const showList = ref(false);
+const jobs = ref<JobSummary[]>([]);
+const listLoading = ref(false);
+const listError = ref("");
 
 // --- 派生值 ---
 const rate = computed(() => `${ratePct.value >= 0 ? "+" : ""}${ratePct.value}%`);
@@ -451,11 +559,11 @@ const resume = async (): Promise<void> => {
   }
 };
 
-const download = (): void => {
-  if (!jobId.value) return;
+const download = (id: string, name: string): void => {
+  if (!id) return;
   const link = document.createElement("a");
-  link.href = fileUrl(jobId.value);
-  link.download = `${title.value.trim() || "audiobook"}.m4b`;
+  link.href = fileUrl(id);
+  link.download = `${name.trim() || "audiobook"}.m4b`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -474,6 +582,90 @@ const reset = (): void => {
   ratePct.value = 0;
   pitchHz.value = 0;
   clearCover();
+};
+
+// --- 历史任务面板 ---
+const STATUS_LABELS: Record<JobStatus, string> = {
+  pending: "排队中",
+  running: "进行中",
+  done: "已完成",
+  failed: "失败",
+  canceled: "已取消",
+};
+const STATUS_BADGE: Record<JobStatus, string> = {
+  pending: "bg-muted text-muted-foreground",
+  running: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400",
+  done: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400",
+  failed: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400",
+  canceled: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
+};
+const isActive = (s: JobStatus): boolean => s === "pending" || s === "running";
+const fmtTime = (iso: string): string => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+};
+
+const loadList = async (): Promise<void> => {
+  listLoading.value = true;
+  listError.value = "";
+  try {
+    jobs.value = await listJobs();
+  } catch (err) {
+    listError.value = (err as AudiobookApiError).message || "加载任务列表失败";
+  } finally {
+    listLoading.value = false;
+  }
+};
+
+const toggleList = (): void => {
+  showList.value = !showList.value;
+  if (showList.value) void loadList();
+};
+
+const closeList = (): void => {
+  showList.value = false;
+};
+
+/** 从列表打开某任务：拉详情并切到对应状态机视图，活跃任务订阅 SSE。 */
+const openJob = async (job: JobSummary): Promise<void> => {
+  closeEvents?.();
+  closeEvents = null;
+  try {
+    const info = await getJob(job.jobId);
+    jobId.value = info.jobId;
+    title.value = info.title;
+    progress.value = info.progress;
+    errorMsg.value = info.error ?? "";
+    showList.value = false;
+    if (info.status === "pending" || info.status === "running") {
+      status.value = "processing";
+      subscribe(info.jobId);
+    } else {
+      status.value = info.status; // done / failed / canceled
+    }
+  } catch (err) {
+    listError.value = (err as AudiobookApiError).message || "打开任务失败";
+  }
+};
+
+/** 列表行内取消活跃任务，成功后刷新列表。 */
+const cancelFromList = async (job: JobSummary): Promise<void> => {
+  try {
+    await cancelJob(job.jobId);
+  } catch {
+    // 取消失败忽略，刷新后以服务端状态为准
+  }
+  await loadList();
+};
+
+/** 列表行内恢复 failed/canceled 任务，成功后刷新列表。 */
+const resumeFromList = async (job: JobSummary): Promise<void> => {
+  try {
+    await resumeJob(job.jobId);
+  } catch (err) {
+    listError.value = (err as AudiobookApiError).message || "恢复失败";
+  }
+  await loadList();
 };
 
 onUnmounted(() => {

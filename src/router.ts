@@ -1,4 +1,4 @@
-import {createRouter, createWebHistory} from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -18,7 +18,7 @@ const router = createRouter({
       component: () => import("./components/epub/index.vue"),
     },
     {
-      path: "/audiobook",
+      path: "/tts",
       name: "audiobook",
       component: () => import("./components/epub/audiobook.vue"),
     },

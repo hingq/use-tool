@@ -36,6 +36,20 @@ export interface JobInfo {
   bitrate: string;
 }
 
+/** 任务列表项，对应 `GET /jobs` 的 `{ jobs: JobSummary[] }`（区别于单任务 JobInfo）。 */
+export interface JobSummary {
+  jobId: string;
+  status: JobStatus;
+  phase: JobPhase;
+  title: string;
+  /** 成品是否已上传 COS。 */
+  uploaded: boolean;
+  /** 本地是否仍有 output.m4b。 */
+  hasLocalFile: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** `POST /jobs` 的创建响应（前端忽略其中的 statusUrl）。 */
 export interface CreateJobResult {
   jobId: string;
@@ -83,6 +97,14 @@ export async function createJob(form: FormData): Promise<CreateJobResult> {
   if (!res.ok) await throwFromResponse(res);
   const data = (await res.json()) as CreateJobResult;
   return { jobId: data.jobId, status: data.status };
+}
+
+/** 列出全部任务（后端已按 createdAt 倒序合并磁盘+内存，无分页）。 */
+export async function listJobs(): Promise<JobSummary[]> {
+  const res = await fetch(`${TTS_BASE}/jobs`);
+  if (!res.ok) await throwFromResponse(res);
+  const data = (await res.json()) as { jobs: JobSummary[] };
+  return data.jobs;
 }
 
 /** 查询任务状态。 */
