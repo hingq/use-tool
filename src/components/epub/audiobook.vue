@@ -1,27 +1,21 @@
 <template>
   <div class="w-full max-w-xl mx-auto px-4 py-8">
     <div
-      class="relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 p-8 shadow-2xl backdrop-blur-xl transition-all duration-300 dark:border-white/10 dark:bg-black/30"
-    >
+      class="relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 p-8 shadow-2xl backdrop-blur-xl transition-all duration-300 dark:border-white/10 dark:bg-black/30">
       <!-- Background glowing orbs -->
       <div class="absolute -top-12 -right-12 -z-10 h-32 w-32 rounded-full bg-indigo-500/20 blur-2xl"></div>
       <div class="absolute -bottom-12 -left-12 -z-10 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl"></div>
 
       <!-- 历史任务切换 -->
-      <button
-        type="button"
-        @click="toggleList"
-        :title="showList ? '返回' : '历史任务'"
+      <button type="button" @click="toggleList" :title="showList ? '返回' : '历史任务'"
         class="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-indigo-500/50 dark:bg-black/20"
-        :class="showList ? 'border-indigo-500/50 text-indigo-500' : ''"
-      >
+        :class="showList ? 'border-indigo-500/50 text-indigo-500' : ''">
         <History class="h-3.5 w-3.5" /> 历史任务
       </button>
 
       <div class="mb-8 text-center">
         <h1
-          class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent dark:from-indigo-400 dark:to-purple-400"
-        >
+          class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent dark:from-indigo-400 dark:to-purple-400">
           TXT ➔ 有声书 (M4B)
         </h1>
         <p class="mt-2 text-sm text-muted-foreground">
@@ -31,214 +25,188 @@
 
       <!-- ===== 状态机视图（非历史任务面板时显示） ===== -->
       <template v-if="!showList">
-      <!-- ========================= State: form ========================= -->
-      <form v-if="status === 'form'" @submit.prevent="submit" class="space-y-5">
-        <!-- TXT upload / dropzone -->
-        <div
-          @dragover.prevent="isDragging = true"
-          @dragleave.prevent="isDragging = false"
-          @drop.prevent="handleDrop"
-          class="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-300 cursor-pointer"
-          :class="
-            isDragging
+        <!-- ========================= State: form ========================= -->
+        <form v-if="status === 'form'" @submit.prevent="submit" class="space-y-5">
+          <!-- TXT upload / dropzone -->
+          <div @dragover.prevent="isDragging = true" @dragleave.prevent="isDragging = false" @drop.prevent="handleDrop"
+            class="group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-300 cursor-pointer"
+            :class="isDragging
               ? 'border-indigo-500 bg-indigo-500/5 dark:bg-indigo-500/10'
               : 'border-muted-foreground/20 hover:border-indigo-500/50 hover:bg-white/10 dark:hover:bg-white/5'
-          "
-        >
-          <input id="ab-text" type="file" accept=".txt" class="hidden" @change="handleTextChange" />
-          <label for="ab-text" class="absolute inset-0 h-full w-full cursor-pointer"></label>
-          <div class="mb-3 rounded-full bg-indigo-50 p-3 text-indigo-600 transition-transform duration-300 group-hover:scale-110 dark:bg-indigo-950/40 dark:text-indigo-400">
-            <FileText class="h-6 w-6" />
+              ">
+            <input id="ab-text" type="file" accept=".txt" class="hidden" @change="handleTextChange" />
+            <label for="ab-text" class="absolute inset-0 h-full w-full cursor-pointer"></label>
+            <div
+              class="mb-3 rounded-full bg-indigo-50 p-3 text-indigo-600 transition-transform duration-300 group-hover:scale-110 dark:bg-indigo-950/40 dark:text-indigo-400">
+              <FileText class="h-6 w-6" />
+            </div>
+            <h3 class="text-sm font-semibold text-foreground">
+              <template v-if="textFile">{{ textFile.name }}</template>
+              <template v-else>拖拽 TXT 文件，或 <span class="text-indigo-500">点击上传</span></template>
+            </h3>
+            <p class="mt-1 text-xs text-muted-foreground">仅支持 .txt 纯文本（≤ 5MB）</p>
           </div>
-          <h3 class="text-sm font-semibold text-foreground">
-            <template v-if="textFile">{{ textFile.name }}</template>
-            <template v-else>拖拽 TXT 文件，或 <span class="text-indigo-500">点击上传</span></template>
-          </h3>
-          <p class="mt-1 text-xs text-muted-foreground">仅支持 .txt 纯文本（≤ 5MB）</p>
-        </div>
 
-        <!-- Title & author -->
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-muted-foreground">书名 *</label>
-            <input
-              v-model="title"
-              type="text"
-              maxlength="200"
-              placeholder="必填，最长 200 字"
-              class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20"
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-muted-foreground">作者</label>
-            <input
-              v-model="author"
-              type="text"
-              maxlength="200"
-              placeholder="可选"
-              class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20"
-            />
-          </div>
-        </div>
-
-        <!-- Voice & bitrate -->
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-muted-foreground">发音人</label>
-            <select
-              v-model="voice"
-              class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20"
-            >
-              <option v-for="v in VOICES" :key="v.value" :value="v.value">{{ v.label }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold text-muted-foreground">码率</label>
-            <select
-              v-model="bitrate"
-              class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20"
-            >
-              <option v-for="b in BITRATES" :key="b" :value="b">{{ b }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Rate & pitch sliders -->
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
-              <span>语速</span><span class="font-mono text-indigo-500">{{ rate }}</span>
-            </label>
-            <input v-model.number="ratePct" type="range" min="-50" max="50" step="5" class="w-full accent-indigo-600" />
-          </div>
-          <div>
-            <label class="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
-              <span>音高</span><span class="font-mono text-indigo-500">{{ pitch }}</span>
-            </label>
-            <input v-model.number="pitchHz" type="range" min="-50" max="50" step="5" class="w-full accent-indigo-600" />
-          </div>
-        </div>
-
-        <!-- Cover (optional) -->
-        <div>
-          <label class="mb-1 block text-xs font-semibold text-muted-foreground">封面（可选，jpg/png ≤ 2MB）</label>
-          <div class="flex items-center gap-3">
-            <input id="ab-cover" type="file" accept="image/jpeg,image/png" class="hidden" @change="handleCoverChange" />
-            <label
-              for="ab-cover"
-              class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm text-foreground transition-colors hover:border-indigo-500/50 dark:bg-black/20"
-            >
-              <ImageIcon class="h-4 w-4" /> 选择图片
-            </label>
-            <div v-if="coverPreview" class="flex items-center gap-2">
-              <img :src="coverPreview" alt="cover" class="h-10 w-10 rounded-lg object-cover" />
-              <button type="button" @click="clearCover" class="text-muted-foreground hover:text-red-500">
-                <X class="h-4 w-4" />
-              </button>
+          <!-- Title & author -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-muted-foreground">书名 *</label>
+              <input v-model="title" type="text" maxlength="200" placeholder="必填，最长 200 字"
+                class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-muted-foreground">作者</label>
+              <input v-model="author" type="text" maxlength="200" placeholder="可选"
+                class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20" />
             </div>
           </div>
-        </div>
 
-        <!-- Validation error -->
-        <p v-if="formError" class="text-sm text-red-500 dark:text-red-400">{{ formError }}</p>
-
-        <button
-          type="submit"
-          :disabled="!canSubmit"
-          class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Headphones class="h-4 w-4" /> 生成有声书
-        </button>
-      </form>
-
-      <!-- ========================= State: creating ========================= -->
-      <div v-else-if="status === 'creating'" class="flex flex-col items-center justify-center py-12 text-center">
-        <div class="h-14 w-14 animate-spin rounded-full border-4 border-indigo-500/20 border-t-indigo-600"></div>
-        <h3 class="mt-6 text-base font-semibold text-foreground">正在提交任务...</h3>
-      </div>
-
-      <!-- ========================= State: processing ========================= -->
-      <div v-else-if="status === 'processing'" class="py-4">
-        <div class="mb-6 flex items-center justify-center gap-3">
-          <Loader2 class="h-5 w-5 animate-spin text-indigo-600" />
-          <h3 class="text-base font-semibold text-foreground">{{ phaseLabel }}</h3>
-        </div>
-
-        <div class="space-y-5">
-          <div>
-            <div class="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>语音合成 (TTS)</span>
-              <span class="font-mono">{{ progress.ttsChunks.done }} / {{ progress.ttsChunks.total || '—' }}</span>
+          <!-- Voice & bitrate -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-muted-foreground">发音人</label>
+              <select v-model="voice"
+                class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20">
+                <option v-for="v in VOICES" :key="v.value" :value="v.value">{{ v.label }}</option>
+              </select>
             </div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div class="h-full rounded-full bg-indigo-500 transition-all duration-300" :style="{ width: ttsPct + '%' }"></div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-muted-foreground">码率</label>
+              <select v-model="bitrate"
+                class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-500 dark:bg-black/20">
+                <option v-for="b in BITRATES" :key="b" :value="b">{{ b }}</option>
+              </select>
             </div>
           </div>
-          <div>
-            <div class="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>音频转码</span>
-              <span class="font-mono">{{ progress.transcodeChunks.done }} / {{ progress.transcodeChunks.total || '—' }}</span>
+
+          <!-- Rate & pitch sliders -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <span>语速</span><span class="font-mono text-indigo-500">{{ rate }}</span>
+              </label>
+              <input v-model.number="ratePct" type="range" min="-50" max="50" step="5"
+                class="w-full accent-indigo-600" />
             </div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div class="h-full rounded-full bg-purple-500 transition-all duration-300" :style="{ width: transcodePct + '%' }"></div>
+            <div>
+              <label class="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <span>音高</span><span class="font-mono text-indigo-500">{{ pitch }}</span>
+              </label>
+              <input v-model.number="pitchHz" type="range" min="-50" max="50" step="5"
+                class="w-full accent-indigo-600" />
             </div>
           </div>
-        </div>
 
-        <button
-          @click="cancel"
-          class="mx-auto mt-8 flex items-center gap-2 rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80"
-        >
-          <X class="h-4 w-4" /> 取消任务
-        </button>
-      </div>
+          <!-- Cover (optional) -->
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-muted-foreground">封面（可选，jpg/png ≤ 2MB）</label>
+            <div class="flex items-center gap-3">
+              <input id="ab-cover" type="file" accept="image/jpeg,image/png" class="hidden"
+                @change="handleCoverChange" />
+              <label for="ab-cover"
+                class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm text-foreground transition-colors hover:border-indigo-500/50 dark:bg-black/20">
+                <ImageIcon class="h-4 w-4" /> 选择图片
+              </label>
+              <div v-if="coverPreview" class="flex items-center gap-2">
+                <img :src="coverPreview" alt="cover" class="h-10 w-10 rounded-lg object-cover" />
+                <button type="button" @click="clearCover" class="text-muted-foreground hover:text-red-500">
+                  <X class="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
 
-      <!-- ========================= State: done ========================= -->
-      <div v-else-if="status === 'done'" class="flex flex-col items-center justify-center py-6 text-center">
-        <div class="mb-4 rounded-full bg-green-50 p-4 text-green-600 dark:bg-green-950/40 dark:text-green-400">
-          <CheckCircle class="h-10 w-10" />
-        </div>
-        <h3 class="text-lg font-semibold text-foreground">有声书生成完成！</h3>
-        <p class="mt-2 text-sm text-muted-foreground">点击下方按钮下载 M4B 文件</p>
-        <div class="mt-6 flex gap-3">
-          <button
-            @click="download(jobId, title)"
-            class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700"
-          >
-            <Download class="h-4 w-4" /> 下载 M4B
+          <!-- Validation error -->
+          <p v-if="formError" class="text-sm text-red-500 dark:text-red-400">{{ formError }}</p>
+
+          <button type="submit" :disabled="!canSubmit"
+            class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <Headphones class="h-4 w-4" /> 生成有声书
           </button>
-          <button
-            @click="reset"
-            class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80"
-          >
-            新建任务
+        </form>
+
+        <!-- ========================= State: creating ========================= -->
+        <div v-else-if="status === 'creating'" class="flex flex-col items-center justify-center py-12 text-center">
+          <div class="h-14 w-14 animate-spin rounded-full border-4 border-indigo-500/20 border-t-indigo-600"></div>
+          <h3 class="mt-6 text-base font-semibold text-foreground">正在提交任务...</h3>
+        </div>
+
+        <!-- ========================= State: processing ========================= -->
+        <div v-else-if="status === 'processing'" class="py-4">
+          <div class="mb-6 flex items-center justify-center gap-3">
+            <Loader2 class="h-5 w-5 animate-spin text-indigo-600" />
+            <h3 class="text-base font-semibold text-foreground">{{ phaseLabel }}</h3>
+          </div>
+
+          <div class="space-y-5">
+            <div>
+              <div class="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>语音合成 (TTS)</span>
+                <span class="font-mono">{{ progress.ttsChunks.done }} / {{ progress.ttsChunks.total || '—' }}</span>
+              </div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div class="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                  :style="{ width: ttsPct + '%' }">
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>音频转码</span>
+                <span class="font-mono">{{ progress.transcodeChunks.done }} / {{ progress.transcodeChunks.total || '—'
+                }}</span>
+              </div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div class="h-full rounded-full bg-purple-500 transition-all duration-300"
+                  :style="{ width: transcodePct + '%' }"></div>
+              </div>
+            </div>
+          </div>
+
+          <button @click="cancel"
+            class="mx-auto mt-8 flex items-center gap-2 rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80">
+            <X class="h-4 w-4" /> 取消任务
           </button>
         </div>
-      </div>
 
-      <!-- ========================= State: failed / canceled ========================= -->
-      <div v-else class="flex flex-col items-center justify-center py-6 text-center">
-        <div class="mb-4 rounded-full p-4" :class="status === 'failed' ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'">
-          <AlertCircle class="h-10 w-10" />
+        <!-- ========================= State: done ========================= -->
+        <div v-else-if="status === 'done'" class="flex flex-col items-center justify-center py-6 text-center">
+          <div class="mb-4 rounded-full bg-green-50 p-4 text-green-600 dark:bg-green-950/40 dark:text-green-400">
+            <CheckCircle class="h-10 w-10" />
+          </div>
+          <h3 class="text-lg font-semibold text-foreground">有声书生成完成！</h3>
+          <p class="mt-2 text-sm text-muted-foreground">点击下方按钮下载 M4B 文件</p>
+          <div class="mt-6 flex gap-3">
+            <button @click="download(jobId, title)"
+              class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700">
+              <Download class="h-4 w-4" /> 下载 M4B
+            </button>
+            <button @click="reset"
+              class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80">
+              新建任务
+            </button>
+          </div>
         </div>
-        <h3 class="text-lg font-semibold text-foreground">{{ status === 'failed' ? '生成失败' : '任务已取消' }}</h3>
-        <p v-if="errorMsg" class="mt-2 max-w-md text-sm text-red-500 dark:text-red-400">{{ errorMsg }}</p>
-        <div class="mt-6 flex gap-3">
-          <button
-            v-if="jobId"
-            @click="resume"
-            class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700"
-          >
-            <RotateCcw class="h-4 w-4" /> 恢复任务
-          </button>
-          <button
-            @click="reset"
-            class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80"
-          >
-            重新开始
-          </button>
+
+        <!-- ========================= State: failed / canceled ========================= -->
+        <div v-else class="flex flex-col items-center justify-center py-6 text-center">
+          <div class="mb-4 rounded-full p-4"
+            :class="status === 'failed' ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'">
+            <AlertCircle class="h-10 w-10" />
+          </div>
+          <h3 class="text-lg font-semibold text-foreground">{{ status === 'failed' ? '生成失败' : '任务已取消' }}</h3>
+          <p v-if="errorMsg" class="mt-2 max-w-md text-sm text-red-500 dark:text-red-400">{{ errorMsg }}</p>
+          <div class="mt-6 flex gap-3">
+            <button v-if="jobId" @click="resume"
+              class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700">
+              <RotateCcw class="h-4 w-4" /> 恢复任务
+            </button>
+            <button @click="reset"
+              class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80">
+              重新开始
+            </button>
+          </div>
         </div>
-      </div>
       </template>
 
       <!-- ========================= 历史任务面板 ========================= -->
@@ -246,21 +214,12 @@
         <div class="mb-4 flex items-center justify-between">
           <h3 class="text-base font-semibold text-foreground">历史任务</h3>
           <div class="flex items-center gap-2">
-            <button
-              type="button"
-              @click="loadList"
-              :disabled="listLoading"
-              title="刷新"
-              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-indigo-500 disabled:opacity-50 dark:bg-black/20"
-            >
+            <button type="button" @click="loadList" :disabled="listLoading" title="刷新"
+              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-indigo-500 disabled:opacity-50 dark:bg-black/20">
               <RefreshCw class="h-4 w-4" :class="listLoading ? 'animate-spin' : ''" />
             </button>
-            <button
-              type="button"
-              @click="closeList"
-              title="关闭"
-              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-red-500 dark:bg-black/20"
-            >
+            <button type="button" @click="closeList" title="关闭"
+              class="inline-flex items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 p-1.5 text-muted-foreground transition-colors hover:text-red-500 dark:bg-black/20">
               <X class="h-4 w-4" />
             </button>
           </div>
@@ -279,12 +238,8 @@
 
         <!-- list -->
         <ul v-else class="space-y-3">
-          <li
-            v-for="job in jobs"
-            :key="job.jobId"
-            @click="openJob(job)"
-            class="cursor-pointer rounded-2xl border border-muted-foreground/20 bg-white/50 p-4 transition-colors hover:border-indigo-500/50 dark:bg-black/20"
-          >
+          <li v-for="job in jobs" :key="job.jobId" @click="openJob(job)"
+            class="cursor-pointer rounded-2xl border border-muted-foreground/20 bg-white/50 p-4 transition-colors hover:border-indigo-500/50 dark:bg-black/20">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-semibold text-foreground">{{ job.title || "（无标题）" }}</p>
@@ -297,31 +252,20 @@
 
             <!-- 行操作 -->
             <div class="mt-3 flex flex-wrap gap-2" @click.stop>
-              <button
-                v-if="job.status === 'done'"
-                @click="download(job.jobId, job.title)"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700"
-              >
+              <button v-if="job.status === 'done'" @click="download(job.jobId, job.title)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700">
                 <Download class="h-3.5 w-3.5" /> 下载
               </button>
-              <button
-                v-if="isActive(job.status)"
-                @click="cancelFromList(job)"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
-              >
+              <button v-if="isActive(job.status)" @click="cancelFromList(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80">
                 <X class="h-3.5 w-3.5" /> 取消
               </button>
-              <button
-                v-if="job.status === 'failed' || job.status === 'canceled'"
-                @click="resumeFromList(job)"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80"
-              >
+              <button v-if="job.status === 'failed' || job.status === 'canceled'" @click="resumeFromList(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/80">
                 <RotateCcw class="h-3.5 w-3.5" /> 恢复
               </button>
-              <button
-                @click="openJob(job)"
-                class="inline-flex items-center gap-1.5 rounded-lg border border-muted-foreground/20 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-indigo-500/50"
-              >
+              <button @click="openJob(job)"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-muted-foreground/20 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-indigo-500/50">
                 详情
               </button>
             </div>
@@ -343,6 +287,7 @@ import {
   AudiobookApiError,
   type JobInfo, type JobProgress, type JobPhase, type JobStatus, type JobSummary,
 } from "./audiobook-api";
+import { processText, decodeText } from "../../lib/text";
 
 // --- 后端枚举（与 routes/jobs.ts 校验对齐） ---
 const VOICES = [
@@ -416,12 +361,30 @@ const acceptTextFile = (file: File): boolean => {
   formError.value = "";
   textFile.value = file;
   if (!title.value.trim()) title.value = file.name.replace(/\.[^/.]+$/, "");
+  const reader = new FileReader();
+  reader.onload = (ctx) => {
+    const result = ctx.target?.result;
+    if (!(result instanceof ArrayBuffer)) return;
+    try {
+      // 按编码解码（兼容 GBK/GB18030），再做客户端预校验，提前暴露章节检测失败
+      processText(decodeText(result));
+    } catch (err) {
+      formError.value = err instanceof Error ? err.message : "文本预处理失败";
+      textFile.value = null; // 阻止提交无效文件
+    }
+  };
+  reader.onerror = () => {
+    formError.value = "文件读取失败，请重试";
+    textFile.value = null;
+  };
+  reader.readAsArrayBuffer(file);
   return true;
 };
 
 const handleTextChange = (e: Event): void => {
   const input = e.target as HTMLInputElement;
   if (input.files?.[0]) acceptTextFile(input.files[0]);
+
 };
 
 const handleDrop = (e: DragEvent): void => {
@@ -501,6 +464,7 @@ const subscribe = (id: string): void => {
 
 // --- 动作 ---
 const submit = async (): Promise<void> => {
+  return
   if (!validate() || !textFile.value) return;
   status.value = "creating";
   errorMsg.value = "";
