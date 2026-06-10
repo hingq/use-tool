@@ -66,7 +66,7 @@ export function decodeText(buffer: ArrayBuffer): string {
 
   // 步骤 2：无 BOM，先尝试严格 UTF-8
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8", {fatal: true}).decode(bytes);
   } catch {
     // 步骤 3：UTF-8 解码失败，回退 GB18030（兼容 GBK/GB2312）
     return new TextDecoder("gb18030").decode(bytes);
@@ -154,7 +154,7 @@ export function getCleanCharCount(text: string): number {
  * - 行尾可有可选空白
  */
 const CHAPTER_REGEX =
-  /^\s*(序章|楔子|引子|尾声|后记|番外(?:篇)?|第\s*[一二三四五六七八九十百千万零\d]+\s*(?:章|回|卷|集|节|篇|部))(?:[\s\u3000]+\S[^\n]{0,40})?\s*$/gm;
+  /^\s*(序章|楔子|引子|尾声|后记|番外(?:篇)?|第?\s*[一二三四五六七八九十百千万零\d]+\s*(?:(?:章|回|卷|集|节|篇|部)|(?=[\s\u3000])))(?:[\s\u3000]+\S[^\n]{0,40})?\s*$/gm;
 
 /**
  * 将中文数字字符串转换为阿拉伯数字整数。
@@ -387,7 +387,6 @@ export function detectChapters(text: string): Chapter[] {
     }
     // 否则跳过（非递增的章节被剔除）
   }
-
   // 步骤 5：总数合理性校验
   const totalCharCount = getCleanCharCount(text);
 
@@ -544,19 +543,19 @@ export function processText(
   text: string,
   chunkSize: number = DEFAULT_CHUNK_SIZE,
 ): TTSChunk[] {
-  // 步骤 1：校验并规范化 chunkSize 参数
+  // 校验并规范化 chunkSize 参数
   const normalizedChunkSize = Math.max(
     MIN_CHUNK_SIZE,
     Math.min(MAX_CHUNK_SIZE, chunkSize),
   );
 
-  // 步骤 2：文本清洗 —— 过滤 HTML 标签、规范化换行符、压缩空白
+  //文本清洗 —— 过滤 HTML 标签、规范化换行符、压缩空白
   const cleanedText = sanitizeText(text);
 
-  // 步骤 3：章节检测 —— 正则初筛 + 四重后置校验（失败则抛错）
+  // 章节检测 —— 正则初筛 + 四重后置校验（失败则抛错）
   const chapters = detectChapters(cleanedText);
 
-  // 步骤 4：TTS 分块 —— 在每章内按 chunkSize 进行标点回退切分
+  //TTS 分块 —— 在每章内按 chunkSize 进行标点回退切分
   const allChunks: TTSChunk[] = [];
   let globalIndex = 0; // 全局分片序号计数器
 

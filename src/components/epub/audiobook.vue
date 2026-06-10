@@ -119,6 +119,74 @@
           <!-- Validation error -->
           <p v-if="formError" class="text-sm text-red-500 dark:text-red-400">{{ formError }}</p>
 
+          <!-- ===== 分片内容校对 ===== -->
+          <div v-if="chunks.length > 0" class="mt-6 space-y-4 rounded-2xl border border-white/20 bg-white/25 p-4 dark:border-white/10 dark:bg-black/15">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <FileText class="h-4 w-4 text-indigo-500" />
+                <h3 class="text-xs font-bold text-foreground">分片内容校对</h3>
+                <span class="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                  共 {{ chunks.length }} 个分片
+                </span>
+              </div>
+            </div>
+
+            <!-- 搜索过滤 -->
+            <div class="relative">
+              <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input v-model="searchQuery" type="text" placeholder="搜索章节标题或分片内容..."
+                class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 py-1.5 pl-9 pr-4 text-xs outline-none transition-colors focus:border-indigo-500 dark:bg-black/20" />
+            </div>
+
+            <!-- 分片卡片列表 -->
+            <div class="space-y-3">
+              <div v-if="filteredChunks.length === 0" class="py-6 text-center text-xs text-muted-foreground">
+                没有找到匹配的分片
+              </div>
+              <div v-for="chunk in paginatedChunks" :key="chunk.index"
+                @click="openEditModal(chunk)"
+                class="group relative overflow-hidden rounded-xl border border-white/15 bg-white/30 p-3.5 shadow-sm transition-all duration-300 hover:border-indigo-500/50 hover:bg-white/50 cursor-pointer dark:border-white/5 dark:bg-black/15 dark:hover:bg-black/25">
+                <div class="mb-2 flex items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="font-mono font-bold text-indigo-500">#{{ chunk.index + 1 }}</span>
+                    <span class="truncate rounded-md bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400" :title="chunk.chapterTitle">
+                      {{ chunk.chapterTitle }}
+                    </span>
+                  </div>
+                  <span class="shrink-0 font-mono text-muted-foreground">
+                    {{ chunk.text.length }} 字
+                  </span>
+                </div>
+                <!-- 文本预览片段 -->
+                <p class="text-xs leading-relaxed text-muted-foreground line-clamp-3 group-hover:text-foreground transition-colors text-left">
+                  {{ truncateText(chunk.text, 120) }}
+                </p>
+                <div class="mt-2.5 flex items-center justify-end text-[10px] font-bold text-indigo-500 group-hover:text-indigo-600 dark:text-indigo-400">
+                  <span class="flex items-center gap-1">
+                    <Eye class="h-3.5 w-3.5" /> 查看详情与编辑
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 分页器 -->
+            <div v-if="totalPages > 1" class="flex items-center justify-between pt-2">
+              <span class="text-xs text-muted-foreground">
+                第 {{ currentPage }} / {{ totalPages }} 页
+              </span>
+              <div class="flex items-center gap-1">
+                <button type="button" :disabled="currentPage === 1" @click="currentPage--"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 text-muted-foreground hover:text-indigo-500 disabled:opacity-30 dark:bg-black/20">
+                  <ChevronLeft class="h-4 w-4" />
+                </button>
+                <button type="button" :disabled="currentPage === totalPages" @click="currentPage++"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 text-muted-foreground hover:text-indigo-500 disabled:opacity-30 dark:bg-black/20">
+                  <ChevronRight class="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
           <button type="submit" :disabled="!canSubmit"
             class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
             <Headphones class="h-4 w-4" /> 生成有声书
@@ -274,13 +342,69 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== 分片编辑对话框 (Dialog Modal) ===== -->
+  <div v-if="activeEditChunk" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <!-- Overlay backdrop -->
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-md" @click="closeEditModal"></div>
+    
+    <!-- Modal content -->
+    <div class="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-black/90 transition-all duration-300">
+      <div class="mb-4 flex items-center justify-between">
+        <div class="flex items-center gap-2 min-w-0">
+          <FileText class="h-5 w-5 text-indigo-500" />
+          <h3 class="text-base font-bold text-foreground truncate">
+            编辑分片 #{{ activeEditChunk.index + 1 }}
+          </h3>
+        </div>
+        <button type="button" @click="closeEditModal" class="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+
+      <div class="space-y-4 text-left">
+        <!-- 章节标题编辑 -->
+        <div>
+          <label class="mb-1 block text-xs font-semibold text-muted-foreground">章节标题 (修改后同步至本章所有分片)</label>
+          <input v-model="activeEditTitle" type="text"
+            class="w-full rounded-xl border border-muted-foreground/20 bg-white/50 px-3 py-2 text-sm outline-none transition-all focus:border-indigo-500 focus:bg-white dark:bg-black/30 dark:focus:bg-black/50"
+            placeholder="请输入章节标题..." />
+        </div>
+
+        <!-- 分片正文编辑 -->
+        <div>
+          <label class="mb-1 block text-xs font-semibold text-muted-foreground">分片正文</label>
+          <textarea v-model="activeEditText" rows="10"
+            class="w-full rounded-2xl border border-muted-foreground/20 bg-white/50 p-4 text-sm leading-relaxed outline-none transition-all focus:border-indigo-500 focus:bg-white dark:bg-black/30 dark:focus:bg-black/50"
+            placeholder="分片内容不能为空..."></textarea>
+        </div>
+        
+        <div class="flex items-center justify-between text-xs text-muted-foreground">
+          <span>实时字数: <strong class="font-mono text-indigo-500">{{ activeEditText.length }}</strong> 字</span>
+          <span>分片索引: #{{ activeEditChunk.index }} (章节 ID: #{{ activeEditChunk.chapterIndex }})</span>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" @click="closeEditModal"
+            class="rounded-xl border border-muted-foreground/20 px-5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            取消
+          </button>
+          <button type="button" @click="saveEditModal" :disabled="!activeEditText.trim() || !activeEditTitle.trim()"
+            class="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            保存修改
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import {
   FileText, ImageIcon, Headphones, Loader2, CheckCircle,
   AlertCircle, Download, RotateCcw, X, History, RefreshCw,
+  Search, ChevronLeft, ChevronRight, Eye,
 } from "lucide-vue-next";
 import {
   createJob, cancelJob, resumeJob, openEvents, fileUrl, listJobs, getJob,
@@ -314,6 +438,76 @@ const pitchHz = ref(0);
 const coverFile = ref<File | null>(null);
 const coverPreview = ref("");
 const formError = ref("");
+
+// --- 文本分片校对状态 ---
+const chunks = ref<TTSChunk[]>([]);
+const searchQuery = ref("");
+const currentPage = ref(1);
+const itemsPerPage = 5;
+
+// --- 对话框详细编辑状态 ---
+const activeEditChunk = ref<TTSChunk | null>(null);
+const activeEditText = ref("");
+const activeEditTitle = ref("");
+
+const openEditModal = (chunk: TTSChunk) => {
+  activeEditChunk.value = chunk;
+  activeEditText.value = chunk.text;
+  activeEditTitle.value = chunk.chapterTitle;
+};
+
+const closeEditModal = () => {
+  activeEditChunk.value = null;
+  activeEditText.value = "";
+  activeEditTitle.value = "";
+};
+
+const saveEditModal = () => {
+  if (activeEditChunk.value) {
+    const oldTitle = activeEditChunk.value.chapterTitle;
+    const newTitle = activeEditTitle.value.trim();
+    if (newTitle && newTitle !== oldTitle) {
+      const targetIdx = activeEditChunk.value.chapterIndex;
+      for (const c of chunks.value) {
+        if (c.chapterIndex === targetIdx) {
+          c.chapterTitle = newTitle;
+        }
+      }
+    }
+
+    activeEditChunk.value.text = activeEditText.value;
+    activeEditChunk.value.charCount = activeEditText.value.replace(/\s/g, "").length;
+  }
+  closeEditModal();
+};
+
+const truncateText = (text: string, len = 120): string => {
+  if (text.length <= len) return text;
+  return text.substring(0, len) + "...";
+};
+
+const filteredChunks = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return chunks.value;
+  return chunks.value.filter(
+    (c) =>
+      c.text.toLowerCase().includes(q) ||
+      c.chapterTitle.toLowerCase().includes(q),
+  );
+});
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredChunks.value.length / itemsPerPage) || 1;
+});
+
+const paginatedChunks = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  return filteredChunks.value.slice(start, start + itemsPerPage);
+});
+
+watch(searchQuery, () => {
+  currentPage.value = 1;
+});
 
 // --- 任务状态 ---
 const jobId = ref("");
@@ -367,15 +561,21 @@ const acceptTextFile = (file: File): boolean => {
     if (!(result instanceof ArrayBuffer)) return;
     try {
       // 按编码解码（兼容 GBK/GB18030），再做客户端预校验，提前暴露章节检测失败
-      processText(decodeText(result));
+      const decoded = decodeText(result);
+      const parsedChunks = processText(decoded);
+      chunks.value = parsedChunks;
+      currentPage.value = 1;
+      searchQuery.value = "";
     } catch (err) {
       formError.value = err instanceof Error ? err.message : "文本预处理失败";
       textFile.value = null; // 阻止提交无效文件
+      chunks.value = [];
     }
   };
   reader.onerror = () => {
     formError.value = "文件读取失败，请重试";
     textFile.value = null;
+    chunks.value = [];
   };
   reader.readAsArrayBuffer(file);
   return true;
@@ -464,13 +664,31 @@ const subscribe = (id: string): void => {
 
 // --- 动作 ---
 const submit = async (): Promise<void> => {
-  return
   if (!validate() || !textFile.value) return;
   status.value = "creating";
   errorMsg.value = "";
   try {
     const form = new FormData();
-    form.append("text", textFile.value, textFile.value.name);
+
+    // 如果有解析编辑的分片，使用分片内容重构文本文件进行上传
+    let fileToUpload = textFile.value;
+    if (chunks.value.length > 0) {
+      let reconstructedText = "";
+      let currentChapterIdx = -1;
+      for (const chunk of chunks.value) {
+        if (chunk.chapterIndex !== currentChapterIdx) {
+          currentChapterIdx = chunk.chapterIndex;
+          reconstructedText += `\n\n${chunk.chapterTitle}\n\n`;
+        } else {
+          reconstructedText += "\n";
+        }
+        reconstructedText += chunk.text;
+      }
+      const blob = new Blob([reconstructedText], { type: "text/plain" });
+      fileToUpload = new File([blob], textFile.value.name, { type: "text/plain" });
+    }
+
+    form.append("text", fileToUpload, fileToUpload.name);
     form.append("title", title.value.trim());
     if (author.value.trim()) form.append("author", author.value.trim());
     form.append("ttsEngine", "edge-tts");
@@ -546,6 +764,9 @@ const reset = (): void => {
   ratePct.value = 0;
   pitchHz.value = 0;
   clearCover();
+  chunks.value = [];
+  searchQuery.value = "";
+  currentPage.value = 1;
 };
 
 // --- 历史任务面板 ---
