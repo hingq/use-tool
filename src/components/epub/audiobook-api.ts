@@ -91,7 +91,10 @@ async function throwFromResponse(res: Response): Promise<never> {
   throw new AudiobookApiError(res.status, message);
 }
 
-/** 创建有声书任务。`form` 须包含 `text` 文件与各参数字段（可选 `cover`）。 */
+/**
+ * 单次创建并启动任务。`form` 含元数据字段 + `chunks`（整本 `TTSChunk[]` 的 JSON 文件分片）
+ * + 可选 `cover`；后端据此创建任务并后台启动流水线，无需再单独上传分片或启动。
+ */
 export async function createJob(form: FormData): Promise<CreateJobResult> {
   const res = await fetch(`${TTS_BASE}/jobs`, { method: "POST", body: form });
   if (!res.ok) await throwFromResponse(res);

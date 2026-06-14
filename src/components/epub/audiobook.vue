@@ -120,12 +120,14 @@
           <p v-if="formError" class="text-sm text-red-500 dark:text-red-400">{{ formError }}</p>
 
           <!-- ===== 分片内容校对 ===== -->
-          <div v-if="chunks.length > 0" class="mt-6 space-y-4 rounded-2xl border border-white/20 bg-white/25 p-4 dark:border-white/10 dark:bg-black/15">
+          <div v-if="chunks.length > 0"
+            class="mt-6 space-y-4 rounded-2xl border border-white/20 bg-white/25 p-4 dark:border-white/10 dark:bg-black/15">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <FileText class="h-4 w-4 text-indigo-500" />
                 <h3 class="text-xs font-bold text-foreground">分片内容校对</h3>
-                <span class="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                <span
+                  class="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                   共 {{ chunks.length }} 个分片
                 </span>
               </div>
@@ -139,50 +141,74 @@
             </div>
 
             <!-- 分片卡片列表 -->
-            <div class="space-y-3">
-              <div v-if="filteredChunks.length === 0" class="py-6 text-center text-xs text-muted-foreground">
-                没有找到匹配的分片
-              </div>
-              <div v-for="chunk in paginatedChunks" :key="chunk.index"
-                @click="openEditModal(chunk)"
-                class="group relative overflow-hidden rounded-xl border border-white/15 bg-white/30 p-3.5 shadow-sm transition-all duration-300 hover:border-indigo-500/50 hover:bg-white/50 cursor-pointer dark:border-white/5 dark:bg-black/15 dark:hover:bg-black/25">
-                <div class="mb-2 flex items-center justify-between gap-2 text-xs">
-                  <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="font-mono font-bold text-indigo-500">#{{ chunk.index + 1 }}</span>
-                    <span class="truncate rounded-md bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400" :title="chunk.chapterTitle">
-                      {{ chunk.chapterTitle }}
+            <Transition name="page-fade" mode="out-in">
+              <div :key="currentPage" class="space-y-3">
+                <div v-if="filteredChunks.length === 0" class="py-6 text-center text-xs text-muted-foreground">
+                  没有找到匹配的分片
+                </div>
+                <div v-for="chunk in paginatedChunks" :key="chunk.index" @click="openEditModal(chunk)"
+                  class="group relative overflow-hidden rounded-xl border border-white/15 bg-white/30 p-3.5 shadow-sm transition-all duration-300 hover:border-indigo-500/50 hover:bg-white/50 cursor-pointer dark:border-white/5 dark:bg-black/15 dark:hover:bg-black/25">
+                  <div class="mb-2 flex items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <span class="font-mono font-bold text-indigo-500">#{{ chunk.index + 1 }}</span>
+                      <span
+                        class="truncate rounded-md bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400"
+                        :title="chunk.chapterTitle">
+                        {{ chunk.chapterTitle }}
+                      </span>
+                    </div>
+                    <span class="shrink-0 font-mono text-muted-foreground">
+                      {{ chunk.text.length }} 字
                     </span>
                   </div>
-                  <span class="shrink-0 font-mono text-muted-foreground">
-                    {{ chunk.text.length }} 字
-                  </span>
-                </div>
-                <!-- 文本预览片段 -->
-                <p class="text-xs leading-relaxed text-muted-foreground line-clamp-3 group-hover:text-foreground transition-colors text-left">
-                  {{ truncateText(chunk.text, 120) }}
-                </p>
-                <div class="mt-2.5 flex items-center justify-end text-[10px] font-bold text-indigo-500 group-hover:text-indigo-600 dark:text-indigo-400">
-                  <span class="flex items-center gap-1">
-                    <Eye class="h-3.5 w-3.5" /> 查看详情与编辑
-                  </span>
+                  <!-- 文本预览片段 -->
+                  <p
+                    class="text-xs leading-relaxed text-muted-foreground line-clamp-3 group-hover:text-foreground transition-colors text-left">
+                    {{ truncateText(chunk.text, 120) }}
+                  </p>
+                  <div
+                    class="mt-2.5 flex items-center justify-between text-[10px] font-bold">
+                    <button type="button" @click.stop="submitSingle(chunk)"
+                      class="inline-flex items-center gap-1 rounded-lg bg-indigo-600/90 px-2 py-1 text-white transition-colors hover:bg-indigo-700">
+                      <Headphones class="h-3 w-3" /> 转此片
+                    </button>
+                    <span
+                      class="flex items-center gap-1 text-indigo-500 group-hover:text-indigo-600 dark:text-indigo-400">
+                      <Eye class="h-3.5 w-3.5" /> 查看详情与编辑
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Transition>
 
             <!-- 分页器 -->
-            <div v-if="totalPages > 1" class="flex items-center justify-between pt-2">
-              <span class="text-xs text-muted-foreground">
-                第 {{ currentPage }} / {{ totalPages }} 页
-              </span>
-              <div class="flex items-center gap-1">
-                <button type="button" :disabled="currentPage === 1" @click="currentPage--"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 text-muted-foreground hover:text-indigo-500 disabled:opacity-30 dark:bg-black/20">
+            <div v-if="totalPages > 1"
+              class="flex items-center justify-between mt-4 rounded-2xl border border-white/20 bg-white/10 p-3 shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-black/20">
+              <!-- 左侧进度与数字指示 -->
+              <div class="flex flex-col gap-1.5 flex-1 max-w-[200px] text-left">
+                <span class="text-[11px] font-semibold text-muted-foreground">
+                  第 <span class="text-indigo-600 dark:text-indigo-400 font-mono font-bold">{{ currentPage }}</span> /
+                  <span class="font-mono">{{ totalPages }}</span> 页
+                </span>
+                <!-- 极细渐变进度条 -->
+                <div class="h-1 w-full bg-muted/60 dark:bg-muted/20 rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-out"
+                    :style="{ width: `${(currentPage / totalPages) * 100}%` }">
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右侧操控按钮 -->
+              <div class="flex items-center gap-2">
+                <div type="button" :disabled="currentPage === 1" @click="currentPage--"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/15 bg-white/40 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:scale-105 hover:border-indigo-500/50 hover:bg-white/60 hover:text-indigo-600 active:scale-95 disabled:pointer-events-none disabled:opacity-30 dark:border-white/5 dark:bg-black/30 dark:hover:bg-black/50 dark:hover:text-indigo-400 shadow-sm">
                   <ChevronLeft class="h-4 w-4" />
-                </button>
-                <button type="button" :disabled="currentPage === totalPages" @click="currentPage++"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-muted-foreground/20 bg-white/50 text-muted-foreground hover:text-indigo-500 disabled:opacity-30 dark:bg-black/20">
+                </div>
+                <div type="button" :disabled="currentPage === totalPages" @click="currentPage++"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/15 bg-white/40 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:scale-105 hover:border-indigo-500/50 hover:bg-white/60 hover:text-indigo-600 active:scale-95 disabled:pointer-events-none disabled:opacity-30 dark:border-white/5 dark:bg-black/30 dark:hover:bg-black/50 dark:hover:text-indigo-400 shadow-sm">
                   <ChevronRight class="h-4 w-4" />
-                </button>
+                </div>
               </div>
             </div>
           </div>
@@ -248,6 +274,10 @@
             <button @click="download(jobId, title)"
               class="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:bg-indigo-700">
               <Download class="h-4 w-4" /> 下载 M4B
+            </button>
+            <button v-if="chunks.length > 0" @click="status = 'form'"
+              class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80">
+              返回校对列表
             </button>
             <button @click="reset"
               class="rounded-xl bg-muted px-6 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-muted/80">
@@ -347,9 +377,10 @@
   <div v-if="activeEditChunk" class="fixed inset-0 z-50 flex items-center justify-center p-4">
     <!-- Overlay backdrop -->
     <div class="absolute inset-0 bg-black/60 backdrop-blur-md" @click="closeEditModal"></div>
-    
+
     <!-- Modal content -->
-    <div class="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-black/90 transition-all duration-300">
+    <div
+      class="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-black/90 transition-all duration-300">
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
           <FileText class="h-5 w-5 text-indigo-500" />
@@ -357,7 +388,8 @@
             编辑分片 #{{ activeEditChunk.index + 1 }}
           </h3>
         </div>
-        <button type="button" @click="closeEditModal" class="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+        <button type="button" @click="closeEditModal"
+          class="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
           <X class="h-5 w-5" />
         </button>
       </div>
@@ -378,7 +410,7 @@
             class="w-full rounded-2xl border border-muted-foreground/20 bg-white/50 p-4 text-sm leading-relaxed outline-none transition-all focus:border-indigo-500 focus:bg-white dark:bg-black/30 dark:focus:bg-black/50"
             placeholder="分片内容不能为空..."></textarea>
         </div>
-        
+
         <div class="flex items-center justify-between text-xs text-muted-foreground">
           <span>实时字数: <strong class="font-mono text-indigo-500">{{ activeEditText.length }}</strong> 字</span>
           <span>分片索引: #{{ activeEditChunk.index }} (章节 ID: #{{ activeEditChunk.chapterIndex }})</span>
@@ -412,6 +444,7 @@ import {
   type JobInfo, type JobProgress, type JobPhase, type JobStatus, type JobSummary,
 } from "./audiobook-api";
 import { processText, decodeText } from "../../lib/text";
+import { appendChunks } from "../../lib/fileUpload";
 
 // --- 后端枚举（与 routes/jobs.ts 校验对齐） ---
 const VOICES = [
@@ -663,44 +696,29 @@ const subscribe = (id: string): void => {
 };
 
 // --- 动作 ---
-const submit = async (): Promise<void> => {
-  if (!validate() || !textFile.value) return;
+/**
+ * 单请求任务启动公共流程：构建 multipart（元数据 + chunks JSON 文件分片 + 可选封面）
+ * → 一次 POST /jobs 创建并启动 → 订阅进度。整本合成与单分片转换共用，仅分片集合与标题不同。
+ */
+const runJob = async (chunksToSend: TTSChunk[], jobTitle: string): Promise<void> => {
   status.value = "creating";
   errorMsg.value = "";
   try {
+    // 单次提交：元数据 value 字段 + chunks JSON 文件分片 + 可选封面，后端据此创建并后台启动。
+    // ttsEngine/voice 由后端环境变量固定，前端不再传；totalChunks 由后端从分片数组推导。
     const form = new FormData();
-
-    // 如果有解析编辑的分片，使用分片内容重构文本文件进行上传
-    let fileToUpload = textFile.value;
-    if (chunks.value.length > 0) {
-      let reconstructedText = "";
-      let currentChapterIdx = -1;
-      for (const chunk of chunks.value) {
-        if (chunk.chapterIndex !== currentChapterIdx) {
-          currentChapterIdx = chunk.chapterIndex;
-          reconstructedText += `\n\n${chunk.chapterTitle}\n\n`;
-        } else {
-          reconstructedText += "\n";
-        }
-        reconstructedText += chunk.text;
-      }
-      const blob = new Blob([reconstructedText], { type: "text/plain" });
-      fileToUpload = new File([blob], textFile.value.name, { type: "text/plain" });
-    }
-
-    form.append("text", fileToUpload, fileToUpload.name);
-    form.append("title", title.value.trim());
+    form.append("title", jobTitle);
     if (author.value.trim()) form.append("author", author.value.trim());
-    form.append("ttsEngine", "edge-tts");
-    form.append("voice", voice.value);
     form.append("rate", rate.value);
     form.append("pitch", pitch.value);
     form.append("bitrate", bitrate.value);
+    appendChunks(form, chunksToSend);
     if (coverFile.value) form.append("cover", coverFile.value, coverFile.value.name);
 
     const result = await createJob(form);
     jobId.value = result.jobId;
-    progress.value = { phase: "preprocess", ttsChunks: { done: 0, total: 0 }, transcodeChunks: { done: 0, total: 0 } };
+
+    progress.value = { phase: "tts", ttsChunks: { done: 0, total: chunksToSend.length }, transcodeChunks: { done: 0, total: chunksToSend.length } };
     status.value = "processing";
     subscribe(result.jobId);
   } catch (err) {
@@ -711,6 +729,34 @@ const submit = async (): Promise<void> => {
         : e.message || "提交失败，请检查网络与服务";
     status.value = "failed";
   }
+};
+
+const submit = async (): Promise<void> => {
+  if (!validate() || !textFile.value) return;
+  // 分片在前端切分；缺分片说明解析失败，提前拦截避免创建空任务
+  if (chunks.value.length === 0) {
+    errorMsg.value = "未解析出有效分片，请检查文本";
+    status.value = "failed";
+    return;
+  }
+  await runJob(chunks.value, title.value.trim());
+};
+
+/** 只转换单个分片：重映射为 index/chapterIndex=0 的单分片任务，产出单章 M4B。 */
+const submitSingle = async (chunk: TTSChunk): Promise<void> => {
+  if (!chunk.text.trim()) return;
+  // 后端要求分片序号为 0..total-1，单分片任务必须把该分片重映射到 0
+  const single: TTSChunk = {
+    index: 0,
+    chapterIndex: 0,
+    chapterTitle: chunk.chapterTitle,
+    text: chunk.text,
+    charCount: chunk.charCount,
+  };
+  // 书名可能为空，兜底后拼上章节标题与分片号，便于在历史任务里区分
+  const base = title.value.trim() || "有声书";
+  const jobTitle = `${base} - ${chunk.chapterTitle} #${chunk.index + 1}`.slice(0, TITLE_MAX);
+  await runJob([single], jobTitle);
 };
 
 const cancel = async (): Promise<void> => {
@@ -858,3 +904,20 @@ onUnmounted(() => {
   if (coverPreview.value) URL.revokeObjectURL(coverPreview.value);
 });
 </script>
+
+<style scoped>
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+</style>
